@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "modules": [
+    {
+      "id": "com.coffeebean.events",
+      "repo": "https://github.com/Herschy0829/com.coffeebean.events.git",
+      "latest": "v0.1.0"
+    }
+  ]
+}

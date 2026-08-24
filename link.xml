@@ -1,0 +1,8 @@
+<linker>
+  <!-- 保留 Core 程序集 -->
+  <assembly fullname="CoffeeBean.Core" preserve="all"/>
+  <!--
+    其他模块（CoffeeBean.Events 等）请在各自仓库内添加类似 link.xml，
+    确保 [assembly: CoffeeBeanModule] 特性在 IL2CPP 裁剪后仍可被扫描发现。
+  -->
+</linker>

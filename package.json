@@ -1,0 +1,13 @@
+{
+  "name": "com.coffeebean.core",
+  "version": "0.1.0",
+  "displayName": "CoffeeBean Core",
+  "description": "Core module of the CoffeeBean framework: module discovery, bootstrap, service registry, and module install/uninstall management.",
+  "unity": "6000.0",
+  "author": {
+    "name": "Herschy0829"
+  },
+  "keywords": ["coffeebean", "framework", "modules"],
+  "dependencies": {},
+  "testables": ["com.coffeebean.core"]
+}
