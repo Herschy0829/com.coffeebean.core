@@ -29,6 +29,8 @@ namespace CoffeeBean.EditorTools
         public static void Open()
         {
             var window = GetWindow<ModuleManagerWindow>("CoffeeBean Module Manager");
+            window.minSize = new Vector2(760, 420);
+            window.position = new Rect(100, 100, 900, 560);
             window.Refresh();
         }
 
@@ -42,8 +44,9 @@ namespace CoffeeBean.EditorTools
 
         private void ReloadInstalled()
         {
+            // 只管理 CoffeeBean 模块（com.coffeebean.*），不管理其他来源的包
             _installed = PackageInfo.GetAllRegisteredPackages()
-                .Where(p => p.name.StartsWith("com.coffeebean.") || p.source == PackageSource.Git)
+                .Where(p => p.name.StartsWith("com.coffeebean."))
                 .OrderBy(p => p.name)
                 .ToList();
         }

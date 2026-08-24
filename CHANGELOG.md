@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1] - 2025-xx-xx
+
+### Fixed
+- Module Manager 窗口默认尺寸过小（现在默认 900x560，最小 760x420）
+- Module Manager 只管理 `com.coffeebean.*` 模块，不再列出其他来源的 git 包
+- 模块目录随版本更新：`v0.1.1` 起内置 registry 包含 events + purchase
+
 ## [0.1.0] - 2025-xx-xx
 
 ### Added
