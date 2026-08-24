@@ -5,6 +5,11 @@
       "id": "com.coffeebean.events",
       "repo": "https://github.com/Herschy0829/com.coffeebean.events.git",
       "latest": "v0.1.0"
+    },
+    {
+      "id": "com.coffeebean.purchase",
+      "repo": "https://github.com/Herschy0829/com.coffeebean.purchase.git",
+      "latest": "v0.1.0"
     }
   ]
 }
