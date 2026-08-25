@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.17] - 2025-xx-xx
+
+### Changed
+- 模块目录同步：`com.coffeebean.excel` latest → v0.1.2（文件夹批量 + 增量生成 + 二级预览窗口）
+
 ## [0.1.16] - 2025-xx-xx
 
 ### Changed
