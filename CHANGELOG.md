@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.15] - 2025-xx-xx
+
+### Added
+- 模块目录新增 `com.coffeebean.excel`（v0.1.0，Excel 配置表工具链，Editor-only）
+
+### Changed
+- 模块目录同步：`com.coffeebean.purchase` latest → v0.1.6（Excel 解析迁移到 excel 模块）
+
 ## [0.1.14] - 2025-xx-xx
 
 ### Added
