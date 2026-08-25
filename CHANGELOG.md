@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.5] - 2025-xx-xx
+
+### Fixed
+- `CoffeeBeanBootstrap` 跨场景常驻：`DontDestroyOnLoad` + 单例保护
+  （修复 Loading 场景跳转 Main 时框架被 OnDestroy 关闭、Context 丢失的问题；
+  场景中重复挂载自动销毁多余实例）
+
 ## [0.1.4] - 2025-xx-xx
 
 ### Changed
