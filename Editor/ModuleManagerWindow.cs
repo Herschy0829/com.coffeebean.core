@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEditor.PackageManager;
+using UnityEditor.PackageManager.Requests;
 using UnityEngine;
 // Unity 中同时存在 UnityEditor.PackageInfo（旧）与 UnityEditor.PackageManager.PackageInfo，
 // 用别名消除歧义。
@@ -52,14 +53,31 @@ namespace CoffeeBean.EditorTools
             ReloadInstalled();
         }
 
-        private void ReloadInstalled()
+        /// <summary>
+        /// 刷新已安装模块列表。用 Client.List 轮询获取最新注册快照
+        /// （PackageInfo.GetAllRegisteredPackages 是缓存，安装/更新后可能滞后导致版本号不刷新）。
+        /// </summary>
+        private void ReloadInstalled(Action onCompleted = null)
         {
-            // 只管理 CoffeeBean 模块（com.coffeebean.*），不管理其他来源的包
-            _installed = PackageInfo.GetAllRegisteredPackages()
-                .Where(p => p.name.StartsWith("com.coffeebean."))
-                .OrderBy(p => p.name)
-                .ToList();
-            ReloadInstalledTags();
+            ListRequest request = Client.List();
+            EditorApplication.update += Poll;
+
+            void Poll()
+            {
+                if (!request.IsCompleted) return;
+                EditorApplication.update -= Poll;
+                if (request.Status == StatusCode.Success && request.Result != null)
+                {
+                    // 只管理 CoffeeBean 模块（com.coffeebean.*），不管理其他来源的包
+                    _installed = request.Result
+                        .Where(p => p.name.StartsWith("com.coffeebean."))
+                        .OrderBy(p => p.name)
+                        .ToList();
+                }
+                ReloadInstalledTags();
+                onCompleted?.Invoke();
+                Repaint();
+            }
         }
 
         /// <summary>
@@ -129,18 +147,17 @@ namespace CoffeeBean.EditorTools
                 {
                     _busy = false;
                     if (data != null && data.modules.Count > 0) _registry = data;
-                    FinishUpdateCheck();
+                    ReloadInstalled(ShowUpdateResult);
                 });
             }
             else
             {
-                FinishUpdateCheck();
+                ReloadInstalled(ShowUpdateResult);
             }
         }
 
-        private void FinishUpdateCheck()
+        private void ShowUpdateResult()
         {
-            ReloadInstalled();
             var updatable = _installed.Where(p => IsOutdated(p.name, out _)).ToList();
 
             if (updatable.Count == 0)
@@ -258,9 +275,12 @@ namespace CoffeeBean.EditorTools
                 EditorGUILayout.BeginHorizontal();
                 EditorGUILayout.BeginVertical();
                 EditorGUILayout.LabelField(pkg.name, EditorStyles.boldLabel);
-                string tagInfo = _installedTags.TryGetValue(pkg.name, out string tag) ? "  ref:" + tag : "";
+                // 版本以 manifest 引用里的 tag 为准（每次重读必然最新）；无 tag（file/embedded）才用 pkg.version
+                string versionText = _installedTags.TryGetValue(pkg.name, out string tag) && !string.IsNullOrEmpty(tag)
+                    ? tag
+                    : "v" + pkg.version;
                 string latestInfo = outdated ? $"  → 有更新 {latest}" : "";
-                EditorGUILayout.LabelField($"v{pkg.version}  [{pkg.source}]{tagInfo}{latestInfo}", EditorStyles.miniLabel);
+                EditorGUILayout.LabelField($"{versionText}  [{pkg.source}]{latestInfo}", EditorStyles.miniLabel);
                 EditorGUILayout.EndVertical();
                 if (outdated)
                 {
@@ -280,33 +300,29 @@ namespace CoffeeBean.EditorTools
         private void DrawAvailablePanel()
         {
             EditorGUILayout.BeginVertical(GUI.skin.box, GUILayout.MinWidth(320));
-            EditorGUILayout.LabelField("Available (registry)", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField("Available (未安装)", EditorStyles.boldLabel);
             _availableScroll = EditorGUILayout.BeginScrollView(_availableScroll, GUILayout.Height(320));
+
+            int shown = 0;
             foreach (CoffeeBeanRegistryEntry entry in _registry.modules)
             {
-                bool installed = _installed.Any(p => p.name == entry.id);
-                bool outdated = IsOutdated(entry.id, out _);
+                // 已安装的模块不显示在这里（在 Installed 面板管理：更新/卸载）
+                if (_installed.Any(p => p.name == entry.id)) continue;
+                shown++;
 
                 EditorGUILayout.BeginHorizontal();
                 EditorGUILayout.BeginVertical();
                 EditorGUILayout.LabelField(entry.id, EditorStyles.boldLabel);
-                string latestInfo = "latest: " + (entry.latest ?? "?");
-                if (installed && outdated) latestInfo += "  ← 当前非最新";
-                EditorGUILayout.LabelField(latestInfo, EditorStyles.miniLabel);
+                EditorGUILayout.LabelField("latest: " + (entry.latest ?? "?"), EditorStyles.miniLabel);
                 EditorGUILayout.EndVertical();
-                if (installed)
-                {
-                    if (outdated && GUILayout.Button("Update", GUILayout.Width(70))) UpdateFromEntry(entry);
-                    if (GUILayout.Button("Uninstall", GUILayout.Width(80))) ConfirmUninstallByName(entry.id);
-                }
-                else
-                {
-                    if (GUILayout.Button("Install", GUILayout.Width(70))) InstallFromEntry(entry);
-                }
+                if (GUILayout.Button("Install", GUILayout.Width(70))) InstallFromEntry(entry);
                 EditorGUILayout.EndHorizontal();
                 EditorGUILayout.Space(2);
             }
-            if (_registry.modules.Count == 0)
+
+            if (shown == 0 && _registry.modules.Count > 0)
+                EditorGUILayout.LabelField("全部模块已安装。", EditorStyles.centeredGreyMiniLabel);
+            else if (_registry.modules.Count == 0)
                 EditorGUILayout.LabelField("No modules in registry.", EditorStyles.centeredGreyMiniLabel);
             EditorGUILayout.EndScrollView();
             EditorGUILayout.EndVertical();

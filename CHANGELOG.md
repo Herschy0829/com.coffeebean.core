@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.4] - 2025-xx-xx
+
+### Changed
+- Module Manager：已安装的模块不再出现在 Available（未安装）列表，更新/卸载统一在 Installed 面板
+- Module Manager：已安装列表改用 `Client.List` 异步拉取最新注册快照（修复安装/更新后版本号不刷新），
+  版本显示以 manifest 引用 tag 为准
+
 ## [0.1.3] - 2025-xx-xx
 
 ### Added
