@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.13] - 2025-xx-xx
+
+### Added
+- 模块目录新增 `com.coffeebean.pooling`（v0.1.0，对象池：CPool 纯 C# 泛型池 + CGameObjectPool Prefab 池，独立无依赖）
+
 ## [0.1.12] - 2025-xx-xx
 
 ### Added

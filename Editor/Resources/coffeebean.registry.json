@@ -12,6 +12,11 @@
       "latest": "v0.1.0"
     },
     {
+      "id": "com.coffeebean.pooling",
+      "repo": "https://github.com/Herschy0829/com.coffeebean.pooling.git",
+      "latest": "v0.1.0"
+    },
+    {
       "id": "com.coffeebean.purchase",
       "repo": "https://github.com/Herschy0829/com.coffeebean.purchase.git",
       "latest": "v0.1.5"
