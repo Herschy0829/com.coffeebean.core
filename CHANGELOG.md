@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.3] - 2025-xx-xx
+
+### Added
+- Module Manager 新增**检查更新**：比对已安装模块的 git 引用 tag 与 registry 的 latest
+  （语义化版本比较，v0.1.9 < v0.1.10），可在窗口内一键更新 / 全部更新
+- Installed 面板显示当前 ref 与"有更新"提示，逐行 Update 按钮
+- 单元测试：版本 tag 解析与比较逻辑
+
 ## [0.1.2] - 2025-xx-xx
 
 ### Fixed

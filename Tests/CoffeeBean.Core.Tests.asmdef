@@ -2,7 +2,8 @@
   "name": "CoffeeBean.Core.Tests",
   "rootNamespace": "CoffeeBean.Tests",
   "references": [
-    "CoffeeBean.Core"
+    "CoffeeBean.Core",
+    "CoffeeBean.Core.Editor"
   ],
   "optionalUnityReferences": [
     "TestAssemblies"

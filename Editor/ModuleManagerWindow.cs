@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEditor.PackageManager;
 using UnityEngine;
@@ -13,12 +15,14 @@ namespace CoffeeBean.EditorTools
     /// <summary>
     /// CoffeeBean 模块管理器窗口（Window &gt; CoffeeBean &gt; Module Manager）。
     /// Installed：从 UPM 注册的 com.coffeebean.* 包读取；Available：来自内置/远程 registry。
+    /// 支持：检查已安装模块是否有更新（比对 registry 的 latest tag）→ 窗口内一键更新。
     /// 安装 / 卸载 / 升级通过 <see cref="ModuleInstaller"/> 驱动 Unity Package Manager。
     /// </summary>
     public sealed class ModuleManagerWindow : EditorWindow
     {
         private CoffeeBeanRegistryData _registry = new CoffeeBeanRegistryData();
         private List<PackageInfo> _installed = new List<PackageInfo>();
+        private readonly Dictionary<string, string> _installedTags = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         // 注意：EditorWindow 是 ScriptableObject，不能在字段初始化器里调用 EditorPrefs（原生调用），
         // _remoteUrl 在 OnEnable 中加载。
         private string _remoteUrl;
@@ -55,6 +59,37 @@ namespace CoffeeBean.EditorTools
                 .Where(p => p.name.StartsWith("com.coffeebean."))
                 .OrderBy(p => p.name)
                 .ToList();
+            ReloadInstalledTags();
+        }
+
+        /// <summary>
+        /// 从项目 manifest.json 读取每个已安装模块的 git 引用 tag（最可靠：精确匹配引用字符串）。
+        /// 例如 "com.coffeebean.core": "https://github.com/...git#v0.1.2" → tag = "v0.1.2"。
+        /// </summary>
+        private void ReloadInstalledTags()
+        {
+            _installedTags.Clear();
+            try
+            {
+                string manifestPath = Path.Combine(Directory.GetParent(Application.dataPath).FullName, "Packages", "manifest.json");
+                if (!File.Exists(manifestPath)) return;
+                string json = File.ReadAllText(manifestPath);
+
+                foreach (PackageInfo pkg in _installed)
+                {
+                    var match = Regex.Match(json, "\"" + Regex.Escape(pkg.name) + "\"\\s*:\\s*\"([^\"]*)\"");
+                    if (!match.Success) continue;
+                    string reference = match.Groups[1].Value;
+                    if (!reference.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) continue;
+                    int hashIdx = reference.LastIndexOf('#');
+                    if (hashIdx >= 0 && hashIdx < reference.Length - 1)
+                        _installedTags[pkg.name] = reference.Substring(hashIdx + 1);
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning("[CoffeeBean] Failed to read manifest for update check: " + e.Message);
+            }
         }
 
         private void LoadRemoteRegistry()
@@ -81,6 +116,108 @@ namespace CoffeeBean.EditorTools
             });
         }
 
+        // ========== 检查更新 ==========
+
+        /// <summary>检查已安装模块是否有更新：registry 优先用远程（若配置了 URL），否则用内置。</summary>
+        private void CheckForUpdates()
+        {
+            if (!string.IsNullOrEmpty(_remoteUrl))
+            {
+                _busy = true;
+                _status = "检查更新（远程 registry）...";
+                RegistrySource.LoadRemote(_remoteUrl, data =>
+                {
+                    _busy = false;
+                    if (data != null && data.modules.Count > 0) _registry = data;
+                    FinishUpdateCheck();
+                });
+            }
+            else
+            {
+                FinishUpdateCheck();
+            }
+        }
+
+        private void FinishUpdateCheck()
+        {
+            ReloadInstalled();
+            var updatable = _installed.Where(p => IsOutdated(p.name, out _)).ToList();
+
+            if (updatable.Count == 0)
+            {
+                _status = "所有模块已是最新版本。";
+                EditorUtility.DisplayDialog("检查更新", "所有已安装模块已是最新版本。", "OK");
+                Repaint();
+                return;
+            }
+
+            var lines = updatable.Select(p =>
+            {
+                _installedTags.TryGetValue(p.name, out string cur);
+                IsOutdated(p.name, out string latest);
+                return $"- {p.name}: {(string.IsNullOrEmpty(cur) ? "?" : cur)} → {latest}";
+            });
+            _status = $"发现 {updatable.Count} 个可更新模块。";
+            bool updateAll = EditorUtility.DisplayDialog("发现更新",
+                string.Join("\n", lines) + "\n\n是否立即全部更新？", "全部更新", "稍后");
+            if (updateAll)
+            {
+                foreach (PackageInfo p in updatable)
+                {
+                    CoffeeBeanRegistryEntry entry = FindRegistryEntry(p.name);
+                    if (entry != null) InstallFromEntry(entry, confirmed: true);
+                }
+            }
+            Repaint();
+        }
+
+        private CoffeeBeanRegistryEntry FindRegistryEntry(string packageId)
+            => _registry.modules.FirstOrDefault(e => string.Equals(e.id, packageId, StringComparison.OrdinalIgnoreCase));
+
+        /// <summary>是否可更新：registry 有 latest，且已安装 tag 是语义化版本且低于 latest。</summary>
+        private bool IsOutdated(string packageId, out string latestTag)
+        {
+            latestTag = null;
+            CoffeeBeanRegistryEntry entry = FindRegistryEntry(packageId);
+            if (entry == null || string.IsNullOrEmpty(entry.latest)) return false;
+            latestTag = entry.latest;
+            if (!_installedTags.TryGetValue(packageId, out string installedTag) || string.IsNullOrEmpty(installedTag)) return false;
+            // 非 tag 引用（分支/提交）无法对比，不算可更新
+            if (!TryParseVersion(installedTag, out _)) return false;
+            return CompareTags(installedTag, latestTag) < 0;
+        }
+
+        internal static bool TryParseVersion(string tag, out int[] parts)
+        {
+            parts = null;
+            string s = tag;
+            if (s.StartsWith("v", StringComparison.OrdinalIgnoreCase)) s = s.Substring(1);
+            string[] segments = s.Split('.');
+            if (segments.Length == 0 || segments.Length > 4) return false;
+            parts = new int[segments.Length];
+            for (int i = 0; i < segments.Length; i++)
+            {
+                if (!int.TryParse(segments[i], out parts[i])) return false;
+            }
+            return true;
+        }
+
+        internal static int CompareTags(string a, string b)
+        {
+            if (!TryParseVersion(a, out int[] pa) || !TryParseVersion(b, out int[] pb))
+                return string.CompareOrdinal(a, b);
+            int n = Math.Max(pa.Length, pb.Length);
+            for (int i = 0; i < n; i++)
+            {
+                int va = i < pa.Length ? pa[i] : 0;
+                int vb = i < pb.Length ? pb[i] : 0;
+                if (va != vb) return va.CompareTo(vb);
+            }
+            return 0;
+        }
+
+        // ========== GUI ==========
+
         private void OnGUI()
         {
             DrawToolbar();
@@ -97,6 +234,7 @@ namespace CoffeeBean.EditorTools
         {
             EditorGUILayout.BeginHorizontal(EditorStyles.toolbar);
             GUI.enabled = !_busy;
+            if (GUILayout.Button("检查更新", EditorStyles.toolbarButton)) CheckForUpdates();
             if (GUILayout.Button("Refresh", EditorStyles.toolbarButton))
             {
                 Refresh();
@@ -115,11 +253,20 @@ namespace CoffeeBean.EditorTools
             _installedScroll = EditorGUILayout.BeginScrollView(_installedScroll, GUILayout.Height(320));
             foreach (PackageInfo pkg in _installed)
             {
+                bool outdated = IsOutdated(pkg.name, out string latest);
+
                 EditorGUILayout.BeginHorizontal();
                 EditorGUILayout.BeginVertical();
                 EditorGUILayout.LabelField(pkg.name, EditorStyles.boldLabel);
-                EditorGUILayout.LabelField($"v{pkg.version}  [{pkg.source}]", EditorStyles.miniLabel);
+                string tagInfo = _installedTags.TryGetValue(pkg.name, out string tag) ? "  ref:" + tag : "";
+                string latestInfo = outdated ? $"  → 有更新 {latest}" : "";
+                EditorGUILayout.LabelField($"v{pkg.version}  [{pkg.source}]{tagInfo}{latestInfo}", EditorStyles.miniLabel);
                 EditorGUILayout.EndVertical();
+                if (outdated)
+                {
+                    CoffeeBeanRegistryEntry entry = FindRegistryEntry(pkg.name);
+                    if (entry != null && GUILayout.Button("Update", GUILayout.Width(70))) UpdateFromEntry(entry);
+                }
                 if (GUILayout.Button("Uninstall", GUILayout.Width(80))) ConfirmUninstallByName(pkg.name);
                 EditorGUILayout.EndHorizontal();
                 EditorGUILayout.Space(2);
@@ -138,17 +285,18 @@ namespace CoffeeBean.EditorTools
             foreach (CoffeeBeanRegistryEntry entry in _registry.modules)
             {
                 bool installed = _installed.Any(p => p.name == entry.id);
-                bool outdated = installed && !string.IsNullOrEmpty(entry.latest) &&
-                                _installed.Any(p => p.name == entry.id && p.git != null && p.git.revision != entry.latest);
+                bool outdated = IsOutdated(entry.id, out _);
 
                 EditorGUILayout.BeginHorizontal();
                 EditorGUILayout.BeginVertical();
                 EditorGUILayout.LabelField(entry.id, EditorStyles.boldLabel);
-                EditorGUILayout.LabelField("latest: " + (entry.latest ?? "?"), EditorStyles.miniLabel);
+                string latestInfo = "latest: " + (entry.latest ?? "?");
+                if (installed && outdated) latestInfo += "  ← 当前非最新";
+                EditorGUILayout.LabelField(latestInfo, EditorStyles.miniLabel);
                 EditorGUILayout.EndVertical();
                 if (installed)
                 {
-                    if (outdated && GUILayout.Button("Update", GUILayout.Width(70))) InstallFromEntry(entry);
+                    if (outdated && GUILayout.Button("Update", GUILayout.Width(70))) UpdateFromEntry(entry);
                     if (GUILayout.Button("Uninstall", GUILayout.Width(80))) ConfirmUninstallByName(entry.id);
                 }
                 else
@@ -164,10 +312,29 @@ namespace CoffeeBean.EditorTools
             EditorGUILayout.EndVertical();
         }
 
-        private void InstallFromEntry(CoffeeBeanRegistryEntry entry)
+        // ========== 安装 / 更新 / 卸载 ==========
+
+        /// <summary>更新已安装模块（带确认；Update 本质 = 用新 tag 重新 Add，UPM 会替换引用）。</summary>
+        private void UpdateFromEntry(CoffeeBeanRegistryEntry entry)
         {
+            _installedTags.TryGetValue(entry.id, out string current);
+            if (!EditorUtility.DisplayDialog("更新模块",
+                    $"更新 {entry.id}\n  当前: {(string.IsNullOrEmpty(current) ? "?" : current)}\n  最新: {entry.latest}\n\n确定更新？",
+                    "更新", "取消")) return;
+            InstallFromEntry(entry, confirmed: true);
+        }
+
+        private void InstallFromEntry(CoffeeBeanRegistryEntry entry, bool confirmed = false)
+        {
+            if (!confirmed && _installed.Any(p => p.name == entry.id))
+            {
+                UpdateFromEntry(entry);
+                return;
+            }
+
+            bool isUpdate = _installed.Any(p => p.name == entry.id);
             _busy = true;
-            _status = $"Installing {entry.id}...";
+            _status = isUpdate ? $"Updating {entry.id} → {entry.latest}..." : $"Installing {entry.id}...";
             ModuleInstaller.Install(entry.id, entry.repo, entry.latest, (ok, message) =>
             {
                 _busy = false;
