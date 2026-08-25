@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.6] - 2025-xx-xx
+
+### Added
+- **示例：Bootstrap Demo**（`Samples~/BootstrapDemo`）：手动引导/关闭、已发现模块清单、运行期配置演示
+- 模块目录更新：`com.coffeebean.events` latest → v0.2.0、`com.coffeebean.purchase` latest → v0.1.4（Module Manager 会提示更新）
+
 ## [0.1.5] - 2025-xx-xx
 
 ### Fixed
