@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.1.11] - 2025-xx-xx
+
+### Added
+- **MinCoreVersion 运行时校验**：模块声明的 Core 最低版本不满足时，该模块 fail-fast（不加载）并输出明确错误日志
+  （新工具类 `CoffeeBeanVersion`：语义化版本解析 / 比较 / 最低版本判断，Module Manager 与运行期校验共用同一套版本逻辑）
+- 单元测试：`CoffeeBeanVersionTests`（解析 / 比较 / IsSatisfied，含缺段补零、非法输入退化字典序）
+
+### Changed
+- Module Manager 的版本解析 / 比较收敛到 `CoffeeBeanVersion`（去重，行为不变）
+- 模块目录同步：`com.coffeebean.tools` latest → v0.4.1、`com.coffeebean.events` latest → v0.2.1、`com.coffeebean.purchase` latest → v0.1.5
+
 ## [0.1.10] - 2025-xx-xx
 
 ### Changed

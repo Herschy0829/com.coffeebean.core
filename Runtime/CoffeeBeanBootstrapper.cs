@@ -11,6 +11,9 @@ namespace CoffeeBean
     /// </summary>
     public static class CoffeeBeanBootstrapper
     {
+        /// <summary>Core 模块的固定 id（package.json 的 name）。</summary>
+        public const string CoreModuleId = "com.coffeebean.core";
+
         /// <summary>当前上下文；未加载时为 null。</summary>
         public static CoffeeBeanContext Context { get; private set; }
 
@@ -36,6 +39,23 @@ namespace CoffeeBean
             // 应用配置开关
             foreach (CoffeeBeanModuleInfo info in context.Modules.Modules)
                 info.Enabled = context.Config.IsModuleEnabled(info.Id);
+
+            // 校验 Core 最低版本：模块声明 MinCoreVersion 而当前 Core 不满足时，
+            // 该模块 fail-fast（不加载）并输出明确错误日志，避免"旧 Core + 新模块"的隐性不兼容。
+            // 注意：必须在应用配置开关之后执行（不能让配置把校验禁用的模块重新启用）。
+            CoffeeBeanModuleInfo coreInfo = null;
+            context.Modules.TryGet(CoreModuleId, out coreInfo);
+            foreach (CoffeeBeanModuleInfo info in context.Modules.Modules)
+            {
+                if (ReferenceEquals(info, coreInfo) || string.IsNullOrEmpty(info.MinCoreVersion)) continue;
+                if (!CoffeeBeanVersion.IsSatisfied(coreInfo?.Version, info.MinCoreVersion))
+                {
+                    info.Enabled = false;
+                    context.LogError(
+                        $"Module {info.Id} {info.Version} requires Core >= {info.MinCoreVersion}, " +
+                        $"but installed Core is {coreInfo?.Version ?? "unknown"}. Module disabled.");
+                }
+            }
 
             List<CoffeeBeanModuleInfo> order = ResolveLoadOrder(context.Modules.Modules);
 

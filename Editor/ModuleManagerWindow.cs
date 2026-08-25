@@ -205,33 +205,10 @@ namespace CoffeeBean.EditorTools
         }
 
         internal static bool TryParseVersion(string tag, out int[] parts)
-        {
-            parts = null;
-            string s = tag;
-            if (s.StartsWith("v", StringComparison.OrdinalIgnoreCase)) s = s.Substring(1);
-            string[] segments = s.Split('.');
-            if (segments.Length == 0 || segments.Length > 4) return false;
-            parts = new int[segments.Length];
-            for (int i = 0; i < segments.Length; i++)
-            {
-                if (!int.TryParse(segments[i], out parts[i])) return false;
-            }
-            return true;
-        }
+            => CoffeeBeanVersion.TryParse(tag, out parts);
 
         internal static int CompareTags(string a, string b)
-        {
-            if (!TryParseVersion(a, out int[] pa) || !TryParseVersion(b, out int[] pb))
-                return string.CompareOrdinal(a, b);
-            int n = Math.Max(pa.Length, pb.Length);
-            for (int i = 0; i < n; i++)
-            {
-                int va = i < pa.Length ? pa[i] : 0;
-                int vb = i < pb.Length ? pb[i] : 0;
-                if (va != vb) return va.CompareTo(vb);
-            }
-            return 0;
-        }
+            => CoffeeBeanVersion.Compare(a, b);
 
         // ========== GUI ==========
 
