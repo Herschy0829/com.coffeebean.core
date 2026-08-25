@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.2] - 2025-xx-xx
+
+### Fixed
+- 修复 Module Manager 窗口创建时报错：EditorWindow 字段初始化器里调用 `EditorPrefs.GetString`
+  违反 ScriptableObject 序列化规则（UnityException）→ 移到 `OnEnable()` 加载
+
 ## [0.1.1] - 2025-xx-xx
 
 ### Fixed

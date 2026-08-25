@@ -19,7 +19,9 @@ namespace CoffeeBean.EditorTools
     {
         private CoffeeBeanRegistryData _registry = new CoffeeBeanRegistryData();
         private List<PackageInfo> _installed = new List<PackageInfo>();
-        private string _remoteUrl = EditorPrefs.GetString(RegistrySource.RemoteUrlPrefKey, string.Empty);
+        // 注意：EditorWindow 是 ScriptableObject，不能在字段初始化器里调用 EditorPrefs（原生调用），
+        // _remoteUrl 在 OnEnable 中加载。
+        private string _remoteUrl;
         private Vector2 _installedScroll;
         private Vector2 _availableScroll;
         private string _status = "Ready.";
@@ -34,7 +36,11 @@ namespace CoffeeBean.EditorTools
             window.Refresh();
         }
 
-        private void OnEnable() => Refresh();
+        private void OnEnable()
+        {
+            _remoteUrl = EditorPrefs.GetString(RegistrySource.RemoteUrlPrefKey, string.Empty);
+            Refresh();
+        }
 
         private void Refresh()
         {
