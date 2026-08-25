@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.10] - 2025-xx-xx
+
+### Changed
+- 模块目录同步：`com.coffeebean.tools` latest → v0.4.0
+
 ## [0.1.9] - 2025-xx-xx
 
 ### Changed
