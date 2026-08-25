@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.12] - 2025-xx-xx
+
+### Added
+- 模块目录新增 `com.coffeebean.net`（v0.1.0，网络模块：HTTP / TCP / WebSocket，依赖 tools）
+
 ## [0.1.11] - 2025-xx-xx
 
 ### Added
