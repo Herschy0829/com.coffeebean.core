@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.16] - 2025-xx-xx
+
+### Changed
+- 模块目录同步：`com.coffeebean.excel` latest → v0.1.1（多 Sheet / 分章节 / 列说明注释）
+
 ## [0.1.15] - 2025-xx-xx
 
 ### Added
