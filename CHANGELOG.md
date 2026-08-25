@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.14] - 2025-xx-xx
+
+### Added
+- 模块目录新增 `com.coffeebean.fsm`（v0.1.0，状态机：泛型 CStateMachine + 全局状态，独立无依赖）
+
 ## [0.1.13] - 2025-xx-xx
 
 ### Added

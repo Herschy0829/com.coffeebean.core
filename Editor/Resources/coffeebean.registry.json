@@ -7,6 +7,11 @@
       "latest": "v0.2.1"
     },
     {
+      "id": "com.coffeebean.fsm",
+      "repo": "https://github.com/Herschy0829/com.coffeebean.fsm.git",
+      "latest": "v0.1.0"
+    },
+    {
       "id": "com.coffeebean.net",
       "repo": "https://github.com/Herschy0829/com.coffeebean.net.git",
       "latest": "v0.1.0"
