@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.7] - 2025-xx-xx
+
+### Added
+- 模块目录新增 `com.coffeebean.tools`（v0.1.0，工具模块，公开仓库）
+
 ## [0.1.6] - 2025-xx-xx
 
 ### Added
