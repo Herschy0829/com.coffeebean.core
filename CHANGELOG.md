@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.1.21] - 2025-xx-xx
+
+### Changed
+- 模块目录同步（统一命名空间）：events → v0.3.0、tools → v0.5.0、net/pooling/fsm/excel/purchase → v0.2.0
+
+## [0.1.21] - 2025-xx-xx
+
+### Changed
+- **统一命名空间**：全部类型迁移到 `CoffeeBean` 根命名空间（业务只需 `using CoffeeBean;` 即可使用所有模块主类型），模块内部辅助 / 测试 / 示例保留 `CoffeeBean.X` 子命名空间（父命名空间自动可见）
+- **破坏性变更**：旧 `using CoffeeBean.X;` 需移除（类型已上移到根命名空间）
+
+# Changelog
+
 ## [0.1.20] - 2025-xx-xx
 
 ### Changed
