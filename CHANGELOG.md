@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.18] - 2025-xx-xx
+
+### Changed
+- 模块目录同步：`com.coffeebean.excel` latest → v0.1.3（JSON 生成进 Resources，运行时加载修复）
+
 ## [0.1.17] - 2025-xx-xx
 
 ### Changed
