@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.20] - 2025-xx-xx
+
+### Changed
+- 模块目录同步：`com.coffeebean.excel` latest → v0.1.5（多语言表加密无乱码确认）
+
 ## [0.1.19] - 2025-xx-xx
 
 ### Changed
