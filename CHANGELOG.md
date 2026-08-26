@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.19] - 2025-xx-xx
+
+### Changed
+- 模块目录同步：`com.coffeebean.excel` latest → v0.1.4（配置 JSON 混淆加密，默认开启）
+
 ## [0.1.18] - 2025-xx-xx
 
 ### Changed
