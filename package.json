@@ -1,6 +1,6 @@
 {
   "name": "com.coffeebean.core",
-  "version": "0.1.26",
+  "version": "0.1.27",
   "displayName": "CoffeeBean Core",
   "description": "Core module of the CoffeeBean framework: module discovery, bootstrap, service registry, and module install/uninstall management.",
   "unity": "6000.0",
