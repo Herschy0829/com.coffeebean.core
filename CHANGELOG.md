@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.31] - 2026-08-28
+
+
+### Changed
+- 模块目录同步：asset → v0.1.2（移除 Window/CoffeeBean 子菜单，恢复 Hub 单入口）
+
+# Changelog
+
 ## [0.1.30] - 2026-08-28
 
 
