@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.26] - 2026-08-28
+
+### Added
+- 模块目录新增 `com.coffeebean.asset`（v0.1.0，资源管理模块：Addressables 封装门面 + 组件绑定 + 更新下载，可插拔后端）
+
+# Changelog
+
 ## [0.1.25] - 2026-08-28
 
 ### Changed
