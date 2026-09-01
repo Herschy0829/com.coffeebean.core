@@ -222,16 +222,59 @@ namespace CoffeeBean.EditorTools
 
         // ========== GUI ==========
 
+        private const string NavGroupManage = "管理";
+        private const string NavGroupTools = "工具";
+
+        /// <summary>框架当前版本（显示用；发布时随 ModuleMarker 同步）。</summary>
+        private const string FrameworkVersion = "0.1.29";
+
         private void OnGUI()
         {
-            DrawToolbar();
+            DrawBrandBar();     // 顶部品牌 + 概览徽章
+            DrawToolbar();      // 操作栏
+            DrawBody();         // 主体：左侧导航 + 右侧内容
+            DrawStatusBar();    // 底部状态
+        }
 
+        /// <summary>顶部品牌区：标题 + 版本 + 概览徽章（已装/可装/可更新）。</summary>
+        private void DrawBrandBar()
+        {
+            EditorGUILayout.BeginVertical(GUI.skin.box);
             EditorGUILayout.BeginHorizontal();
-            DrawToolNav();        // 左侧：工具导航
-            DrawContentPanel();   // 右侧：内容区
-            EditorGUILayout.EndHorizontal();
 
-            EditorGUILayout.LabelField(_status, EditorStyles.helpBox);
+            // 标题
+            var titleStyle = new GUIStyle(EditorStyles.boldLabel) { fontSize = 16 };
+            GUILayout.Label("☕ CoffeeBean", titleStyle);
+            GUILayout.Space(6);
+            GUILayout.Label($"框架工具中心 v{FrameworkVersion}", EditorStyles.miniLabel);
+            GUILayout.FlexibleSpace();
+
+            // 概览徽章
+            int outdatedCount = _installed.Count(p => IsOutdated(p.name, out _));
+            DrawBadge($"已装 {_installed.Count}");
+            DrawBadge($"可装 {_registry.modules.Count(m => !_installed.Any(p => p.name == m.id))}");
+            if (outdatedCount > 0)
+                DrawBadgeWarn($"可更新 {outdatedCount}");
+            else
+                DrawBadge("已是最新");
+
+            EditorGUILayout.EndHorizontal();
+            EditorGUILayout.EndVertical();
+        }
+
+        /// <summary>概览徽章（小标签）。</summary>
+        private void DrawBadge(string text)
+        {
+            var box = new GUIStyle("HelpBox") { alignment = TextAnchor.MiddleCenter, padding = new RectOffset(8, 8, 2, 2) };
+            GUILayout.Label(text, box);
+        }
+
+        /// <summary>概览徽章（警示色：有更新）。</summary>
+        private void DrawBadgeWarn(string text)
+        {
+            var style = new GUIStyle("HelpBox") { alignment = TextAnchor.MiddleCenter, padding = new RectOffset(8, 8, 2, 2) };
+            style.normal.textColor = new Color(0.9f, 0.55f, 0.1f);
+            GUILayout.Label(text, style);
         }
 
         private void DrawToolbar()
@@ -248,78 +291,150 @@ namespace CoffeeBean.EditorTools
             }
             if (GUILayout.Button("加载远程 registry", EditorStyles.toolbarButton)) LoadRemoteRegistry();
             GUI.enabled = true;
+            GUILayout.FlexibleSpace();
             _remoteUrl = EditorGUILayout.TextField(_remoteUrl, GUILayout.MinWidth(220));
             EditorGUILayout.EndHorizontal();
         }
 
-        /// <summary>左侧：工具导航（内置模块管理 + 各模块注册的工具）。</summary>
+        private void DrawBody()
+        {
+            EditorGUILayout.BeginHorizontal();
+            DrawToolNav();        // 左侧：分组导航
+            DrawContentPanel();   // 右侧：内容区
+            EditorGUILayout.EndHorizontal();
+        }
+
+        private void DrawStatusBar()
+        {
+            EditorGUILayout.LabelField(_status, EditorStyles.helpBox);
+        }
+
+        /// <summary>左侧：分组导航（管理 / 工具），选中高亮 + 描述 tooltip。</summary>
         private void DrawToolNav()
         {
             EditorGUILayout.BeginVertical(GUI.skin.box, GUILayout.Width(240));
-            EditorGUILayout.LabelField("功能", EditorStyles.boldLabel);
             _toolsScroll = EditorGUILayout.BeginScrollView(_toolsScroll);
 
-            // 内置：模块管理
-            if (GUILayout.Button(new GUIContent("模块管理", "安装 / 卸载 / 更新 CoffeeBean 模块"),
-                    NavStyle(_selectedTool == BuiltinModuleManager), GUILayout.Height(34)))
+            // —— 管理组 ——
+            DrawNavGroupLabel(NavGroupManage);
+            if (DrawNavButton("模块管理", "安装 / 卸载 / 更新 CoffeeBean 模块", _selectedTool == BuiltinModuleManager))
             {
                 _selectedTool = BuiltinModuleManager;
             }
 
-            // 各模块工具（按模块分组显示）
-            string lastModule = null;
-            foreach (CoffeeBeanToolRegistry.ToolEntry tool in _tools)
+            // —— 工具组 ——
+            DrawNavGroupLabel(NavGroupTools);
+            if (_tools.Count == 0)
             {
-                string moduleLabel = string.IsNullOrEmpty(tool.Module) ? "其他" : tool.Module;
-                if (lastModule != null && moduleLabel != lastModule)
+                EditorGUILayout.LabelField("（未发现模块工具）", EditorStyles.centeredGreyMiniLabel);
+            }
+            else
+            {
+                string lastModule = null;
+                foreach (CoffeeBeanToolRegistry.ToolEntry tool in _tools)
                 {
-                    EditorGUILayout.Space(4);
-                }
-                lastModule = moduleLabel;
+                    string moduleLabel = string.IsNullOrEmpty(tool.Module) ? "其他" : tool.Module;
+                    if (lastModule != null && moduleLabel != lastModule)
+                    {
+                        EditorGUILayout.Space(2);
+                    }
+                    lastModule = moduleLabel;
 
-                bool selected = _selectedTool == tool.Title;
-                var content = new GUIContent($"{moduleLabel} · {tool.Title}", tool.Description);
-                if (GUILayout.Button(content, NavStyle(selected), GUILayout.Height(34)))
-                {
-                    _selectedTool = tool.Title;
-                    tool.Open(); // 打开独立工具窗口
+                    bool selected = _selectedTool == tool.Title;
+                    if (DrawNavButton($"{moduleLabel} · {tool.Title}", tool.Description, selected))
+                    {
+                        _selectedTool = tool.Title;
+                    }
                 }
             }
-
-            if (_tools.Count == 0)
-                EditorGUILayout.LabelField("（未发现其他模块工具）", EditorStyles.centeredGreyMiniLabel);
 
             EditorGUILayout.EndScrollView();
             EditorGUILayout.EndVertical();
         }
 
-        private static GUIStyle NavStyle(bool selected)
-            => selected ? "SelectionRect" : "Button";
+        /// <summary>导航分组标题（小字 + 分隔）。</summary>
+        private static void DrawNavGroupLabel(string groupName)
+        {
+            var style = new GUIStyle(EditorStyles.miniBoldLabel) { normal = { textColor = new Color(0.5f, 0.6f, 0.8f) } };
+            EditorGUILayout.LabelField(groupName, style);
+        }
 
-        /// <summary>右侧：内容区（当前选中项）。</summary>
+        /// <summary>导航项（选中态高亮）。</summary>
+        private static bool DrawNavButton(string text, string tooltip, bool selected)
+        {
+            var content = new GUIContent(text, tooltip);
+            if (selected)
+            {
+                var selectedStyle = new GUIStyle("SelectionRect") { richText = true, alignment = TextAnchor.MiddleLeft };
+                selectedStyle.padding = new RectOffset(8, 4, 4, 4);
+                GUILayout.Label("▸ " + text, selectedStyle, GUILayout.Height(30));
+                return false;
+            }
+            var style = new GUIStyle(GUI.skin.button) { alignment = TextAnchor.MiddleLeft };
+            style.padding = new RectOffset(8, 4, 4, 4);
+            return GUILayout.Button(content, style, GUILayout.Height(30));
+        }
+
+        /// <summary>右侧：内容区（模块管理 或 工具卡片）。</summary>
         private void DrawContentPanel()
         {
+            EditorGUILayout.BeginVertical(GUILayout.ExpandHeight(true));
             if (_selectedTool == BuiltinModuleManager)
             {
-                EditorGUILayout.BeginVertical();
                 DrawModuleManager();
-                EditorGUILayout.EndVertical();
             }
             else
             {
-                // 工具已在点击时打开独立窗口，这里给个占位提示
-                EditorGUILayout.BeginVertical(GUI.skin.box);
-                EditorGUILayout.LabelField("工具窗口", EditorStyles.boldLabel);
-                EditorGUILayout.HelpBox(
-                    $"「{_selectedTool}」已在独立窗口中打开。\n\n提示：工具由对应模块的 Editor 程序集提供，入口统一收敛到本窗口。",
-                    MessageType.Info);
-                EditorGUILayout.EndVertical();
+                DrawToolCard();
             }
+            EditorGUILayout.EndVertical();
+        }
+
+        /// <summary>工具卡片视图：选中工具时显示详情 + 大"打开"按钮（替代空占位）。</summary>
+        private void DrawToolCard()
+        {
+            CoffeeBeanToolRegistry.ToolEntry tool = _tools.FirstOrDefault(t => t.Title == _selectedTool);
+            if (tool == null)
+            {
+                _selectedTool = BuiltinModuleManager;
+                return;
+            }
+
+            EditorGUILayout.BeginVertical(GUI.skin.box, GUILayout.ExpandHeight(true));
+            EditorGUILayout.Space(6);
+
+            // 图标 + 标题
+            EditorGUILayout.LabelField("🧰 " + tool.Title, new GUIStyle(EditorStyles.boldLabel) { fontSize = 15 });
+            EditorGUILayout.Space(4);
+
+            // 描述
+            if (!string.IsNullOrEmpty(tool.Description))
+            {
+                EditorGUILayout.LabelField(tool.Description, EditorStyles.wordWrappedLabel);
+            }
+
+            // 元信息
+            EditorGUILayout.Space(6);
+            EditorGUILayout.LabelField("所属模块", EditorStyles.miniBoldLabel);
+            EditorGUILayout.LabelField(string.IsNullOrEmpty(tool.Module) ? "（未标注）" : tool.Module, EditorStyles.miniLabel);
+            EditorGUILayout.LabelField("程序集", EditorStyles.miniBoldLabel);
+            EditorGUILayout.LabelField(tool.WindowType?.Assembly?.GetName()?.Name ?? "?", EditorStyles.miniLabel);
+
+            EditorGUILayout.Space(12);
+
+            // 大打开按钮
+            if (GUILayout.Button("打开「" + tool.Title + "」", GUILayout.Height(44)))
+            {
+                tool.Open();
+            }
+            EditorGUILayout.HelpBox("工具在独立窗口打开，本窗口保持为统一入口。", MessageType.None);
+
+            EditorGUILayout.EndVertical();
         }
 
         private void DrawModuleManager()
         {
-            EditorGUILayout.LabelField("模块管理（已安装 / 可安装）", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField("模块管理", new GUIStyle(EditorStyles.boldLabel) { fontSize = 14 });
             EditorGUILayout.Space(4);
 
             EditorGUILayout.BeginHorizontal();
