@@ -9,7 +9,7 @@
     {
       "id": "com.coffeebean.excel",
       "repo": "https://github.com/Herschy0829/com.coffeebean.excel.git",
-      "latest": "v0.2.0"
+      "latest": "v0.2.1"
     },
     {
       "id": "com.coffeebean.fsm",
@@ -29,7 +29,7 @@
     {
       "id": "com.coffeebean.purchase",
       "repo": "https://github.com/Herschy0829/com.coffeebean.purchase.git",
-      "latest": "v0.2.0"
+      "latest": "v0.2.1"
     },
     {
       "id": "com.coffeebean.save",
@@ -44,7 +44,7 @@
     {
       "id": "com.coffeebean.ui",
       "repo": "https://github.com/Herschy0829/com.coffeebean.ui.git",
-      "latest": "v0.1.0"
+      "latest": "v0.1.1"
     }
   ]
 }

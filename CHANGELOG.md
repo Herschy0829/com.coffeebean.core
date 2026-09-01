@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.25] - 2026-08-28
+
+### Changed
+- 模块目录同步：excel → v0.2.1、purchase → v0.2.1、ui → v0.1.1
+
+# Changelog
+
 ## [0.1.24] - 2026-08-28
 
 ### Changed
