@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.24] - 2026-08-28
+
+### Changed
+- **CoffeeBean 菜单收敛为单入口**：`Window > CoffeeBean` 打开工具中心窗口（原 Module Manager 改造）——
+  左侧工具导航（内置"模块管理" + 各模块注册的 Editor 工具一键打开），右侧模块管理内容区（已安装/可安装/检查更新/远程 registry）
+- **新增 `CoffeeBeanToolAttribute` + `CoffeeBeanToolRegistry`**：各模块 Editor 工具窗口打标记即被 Hub 自动发现
+  （模块内复制同名 attribute，无需编译期依赖 core；excel/purchase 已接入，移除各自独立菜单项）
+
 ## [0.1.23] - 2026-08-28
 
 ### Added

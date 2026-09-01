@@ -14,9 +14,10 @@ using PackageInfo = UnityEditor.PackageManager.PackageInfo;
 namespace CoffeeBean.EditorTools
 {
     /// <summary>
-    /// CoffeeBean 模块管理器窗口（Window &gt; CoffeeBean &gt; Module Manager）。
-    /// Installed：从 UPM 注册的 com.coffeebean.* 包读取；Available：来自内置/远程 registry。
-    /// 支持：检查已安装模块是否有更新（比对 registry 的 latest tag）→ 窗口内一键更新。
+    /// CoffeeBean 工具中心窗口（Window &gt; CoffeeBean，唯一入口）：
+    /// - 左侧：工具导航 —— 各模块注册的 Editor 工具（Excel/Purchase 等，反射发现）一键打开；
+    ///   以及本窗口内置的"模块管理"。
+    /// - 右侧：内容区 —— 模块管理（已安装 Installed / 可安装 Available、检查更新、远程 registry）。
     /// 安装 / 卸载 / 升级通过 <see cref="ModuleInstaller"/> 驱动 Unity Package Manager。
     /// </summary>
     public sealed class ModuleManagerWindow : EditorWindow
@@ -29,21 +30,30 @@ namespace CoffeeBean.EditorTools
         private string _remoteUrl;
         private Vector2 _installedScroll;
         private Vector2 _availableScroll;
-        private string _status = "Ready.";
+        private string _status = "就绪。";
         private bool _busy;
 
-        [MenuItem("Window/CoffeeBean/Module Manager")]
+        // ========== 工具导航 ==========
+        private List<CoffeeBeanToolRegistry.ToolEntry> _tools = new List<CoffeeBeanToolRegistry.ToolEntry>();
+        private Vector2 _toolsScroll;
+        private string _selectedTool; // 当前选中工具标题（"模块管理"为内置项）
+
+        private const string BuiltinModuleManager = "模块管理";
+
+        [MenuItem("Window/CoffeeBean")]
         public static void Open()
         {
-            var window = GetWindow<ModuleManagerWindow>("CoffeeBean Module Manager");
-            window.minSize = new Vector2(760, 420);
-            window.position = new Rect(100, 100, 900, 560);
+            var window = GetWindow<ModuleManagerWindow>("CoffeeBean");
+            window.minSize = new Vector2(880, 480);
+            window.position = new Rect(100, 100, 1020, 620);
             window.Refresh();
         }
 
         private void OnEnable()
         {
             _remoteUrl = EditorPrefs.GetString(RegistrySource.RemoteUrlPrefKey, string.Empty);
+            _tools = CoffeeBeanToolRegistry.Scan();
+            _selectedTool = BuiltinModuleManager;
             Refresh();
         }
 
@@ -114,22 +124,22 @@ namespace CoffeeBean.EditorTools
         {
             if (string.IsNullOrEmpty(_remoteUrl))
             {
-                _status = "Remote registry URL is empty.";
+                _status = "远程 registry 地址为空。";
                 return;
             }
             EditorPrefs.SetString(RegistrySource.RemoteUrlPrefKey, _remoteUrl);
             _busy = true;
-            _status = "Fetching remote registry...";
+            _status = "正在拉取远程 registry...";
             RegistrySource.LoadRemote(_remoteUrl, data =>
             {
                 _busy = false;
                 if (data == null || data.modules.Count == 0)
                 {
-                    _status = "Remote registry empty or failed.";
+                    _status = "远程 registry 为空或拉取失败。";
                     return;
                 }
                 _registry = data;
-                _status = $"Remote registry loaded ({data.modules.Count} modules).";
+                _status = $"远程 registry 已加载（{data.modules.Count} 个模块）。";
                 Repaint();
             });
         }
@@ -217,11 +227,11 @@ namespace CoffeeBean.EditorTools
             DrawToolbar();
 
             EditorGUILayout.BeginHorizontal();
-            DrawInstalledPanel();
-            DrawAvailablePanel();
+            DrawToolNav();        // 左侧：工具导航
+            DrawContentPanel();   // 右侧：内容区
             EditorGUILayout.EndHorizontal();
 
-            EditorGUILayout.LabelField("Status: " + _status, EditorStyles.helpBox);
+            EditorGUILayout.LabelField(_status, EditorStyles.helpBox);
         }
 
         private void DrawToolbar()
@@ -229,21 +239,99 @@ namespace CoffeeBean.EditorTools
             EditorGUILayout.BeginHorizontal(EditorStyles.toolbar);
             GUI.enabled = !_busy;
             if (GUILayout.Button("检查更新", EditorStyles.toolbarButton)) CheckForUpdates();
-            if (GUILayout.Button("Refresh", EditorStyles.toolbarButton))
+            if (GUILayout.Button("刷新", EditorStyles.toolbarButton))
             {
+                CoffeeBeanToolRegistry.RefreshCache();
+                _tools = CoffeeBeanToolRegistry.Scan();
                 Refresh();
-                _status = "Refreshed.";
+                _status = "已刷新。";
             }
-            if (GUILayout.Button("Load Remote Registry", EditorStyles.toolbarButton)) LoadRemoteRegistry();
+            if (GUILayout.Button("加载远程 registry", EditorStyles.toolbarButton)) LoadRemoteRegistry();
             GUI.enabled = true;
             _remoteUrl = EditorGUILayout.TextField(_remoteUrl, GUILayout.MinWidth(220));
+            EditorGUILayout.EndHorizontal();
+        }
+
+        /// <summary>左侧：工具导航（内置模块管理 + 各模块注册的工具）。</summary>
+        private void DrawToolNav()
+        {
+            EditorGUILayout.BeginVertical(GUI.skin.box, GUILayout.Width(240));
+            EditorGUILayout.LabelField("功能", EditorStyles.boldLabel);
+            _toolsScroll = EditorGUILayout.BeginScrollView(_toolsScroll);
+
+            // 内置：模块管理
+            if (GUILayout.Button(new GUIContent("模块管理", "安装 / 卸载 / 更新 CoffeeBean 模块"),
+                    NavStyle(_selectedTool == BuiltinModuleManager), GUILayout.Height(34)))
+            {
+                _selectedTool = BuiltinModuleManager;
+            }
+
+            // 各模块工具（按模块分组显示）
+            string lastModule = null;
+            foreach (CoffeeBeanToolRegistry.ToolEntry tool in _tools)
+            {
+                string moduleLabel = string.IsNullOrEmpty(tool.Module) ? "其他" : tool.Module;
+                if (lastModule != null && moduleLabel != lastModule)
+                {
+                    EditorGUILayout.Space(4);
+                }
+                lastModule = moduleLabel;
+
+                bool selected = _selectedTool == tool.Title;
+                var content = new GUIContent($"{moduleLabel} · {tool.Title}", tool.Description);
+                if (GUILayout.Button(content, NavStyle(selected), GUILayout.Height(34)))
+                {
+                    _selectedTool = tool.Title;
+                    tool.Open(); // 打开独立工具窗口
+                }
+            }
+
+            if (_tools.Count == 0)
+                EditorGUILayout.LabelField("（未发现其他模块工具）", EditorStyles.centeredGreyMiniLabel);
+
+            EditorGUILayout.EndScrollView();
+            EditorGUILayout.EndVertical();
+        }
+
+        private static GUIStyle NavStyle(bool selected)
+            => selected ? "SelectionRect" : "Button";
+
+        /// <summary>右侧：内容区（当前选中项）。</summary>
+        private void DrawContentPanel()
+        {
+            if (_selectedTool == BuiltinModuleManager)
+            {
+                EditorGUILayout.BeginVertical();
+                DrawModuleManager();
+                EditorGUILayout.EndVertical();
+            }
+            else
+            {
+                // 工具已在点击时打开独立窗口，这里给个占位提示
+                EditorGUILayout.BeginVertical(GUI.skin.box);
+                EditorGUILayout.LabelField("工具窗口", EditorStyles.boldLabel);
+                EditorGUILayout.HelpBox(
+                    $"「{_selectedTool}」已在独立窗口中打开。\n\n提示：工具由对应模块的 Editor 程序集提供，入口统一收敛到本窗口。",
+                    MessageType.Info);
+                EditorGUILayout.EndVertical();
+            }
+        }
+
+        private void DrawModuleManager()
+        {
+            EditorGUILayout.LabelField("模块管理（已安装 / 可安装）", EditorStyles.boldLabel);
+            EditorGUILayout.Space(4);
+
+            EditorGUILayout.BeginHorizontal();
+            DrawInstalledPanel();
+            DrawAvailablePanel();
             EditorGUILayout.EndHorizontal();
         }
 
         private void DrawInstalledPanel()
         {
             EditorGUILayout.BeginVertical(GUI.skin.box, GUILayout.MinWidth(320), GUILayout.MaxWidth(480));
-            EditorGUILayout.LabelField("Installed", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField("已安装", EditorStyles.boldLabel);
             _installedScroll = EditorGUILayout.BeginScrollView(_installedScroll, GUILayout.Height(320));
             foreach (PackageInfo pkg in _installed)
             {
@@ -262,14 +350,14 @@ namespace CoffeeBean.EditorTools
                 if (outdated)
                 {
                     CoffeeBeanRegistryEntry entry = FindRegistryEntry(pkg.name);
-                    if (entry != null && GUILayout.Button("Update", GUILayout.Width(70))) UpdateFromEntry(entry);
+                    if (entry != null && GUILayout.Button("更新", GUILayout.Width(60))) UpdateFromEntry(entry);
                 }
-                if (GUILayout.Button("Uninstall", GUILayout.Width(80))) ConfirmUninstallByName(pkg.name);
+                if (GUILayout.Button("卸载", GUILayout.Width(60))) ConfirmUninstallByName(pkg.name);
                 EditorGUILayout.EndHorizontal();
                 EditorGUILayout.Space(2);
             }
             if (_installed.Count == 0)
-                EditorGUILayout.LabelField("No com.coffeebean.* packages installed.", EditorStyles.centeredGreyMiniLabel);
+                EditorGUILayout.LabelField("未安装任何 com.coffeebean.* 包。", EditorStyles.centeredGreyMiniLabel);
             EditorGUILayout.EndScrollView();
             EditorGUILayout.EndVertical();
         }
@@ -277,22 +365,22 @@ namespace CoffeeBean.EditorTools
         private void DrawAvailablePanel()
         {
             EditorGUILayout.BeginVertical(GUI.skin.box, GUILayout.MinWidth(320));
-            EditorGUILayout.LabelField("Available (未安装)", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField("可安装（Available）", EditorStyles.boldLabel);
             _availableScroll = EditorGUILayout.BeginScrollView(_availableScroll, GUILayout.Height(320));
 
             int shown = 0;
             foreach (CoffeeBeanRegistryEntry entry in _registry.modules)
             {
-                // 已安装的模块不显示在这里（在 Installed 面板管理：更新/卸载）
+                // 已安装的模块不显示在这里（在已安装面板管理：更新/卸载）
                 if (_installed.Any(p => p.name == entry.id)) continue;
                 shown++;
 
                 EditorGUILayout.BeginHorizontal();
                 EditorGUILayout.BeginVertical();
                 EditorGUILayout.LabelField(entry.id, EditorStyles.boldLabel);
-                EditorGUILayout.LabelField("latest: " + (entry.latest ?? "?"), EditorStyles.miniLabel);
+                EditorGUILayout.LabelField("最新: " + (entry.latest ?? "?"), EditorStyles.miniLabel);
                 EditorGUILayout.EndVertical();
-                if (GUILayout.Button("Install", GUILayout.Width(70))) InstallFromEntry(entry);
+                if (GUILayout.Button("安装", GUILayout.Width(60))) InstallFromEntry(entry);
                 EditorGUILayout.EndHorizontal();
                 EditorGUILayout.Space(2);
             }
@@ -300,14 +388,14 @@ namespace CoffeeBean.EditorTools
             if (shown == 0 && _registry.modules.Count > 0)
                 EditorGUILayout.LabelField("全部模块已安装。", EditorStyles.centeredGreyMiniLabel);
             else if (_registry.modules.Count == 0)
-                EditorGUILayout.LabelField("No modules in registry.", EditorStyles.centeredGreyMiniLabel);
+                EditorGUILayout.LabelField("registry 中没有模块。", EditorStyles.centeredGreyMiniLabel);
             EditorGUILayout.EndScrollView();
             EditorGUILayout.EndVertical();
         }
 
         // ========== 安装 / 更新 / 卸载 ==========
 
-        /// <summary>更新已安装模块（带确认；Update 本质 = 用新 tag 重新 Add，UPM 会替换引用）。</summary>
+        /// <summary>更新已安装模块（带确认；更新本质 = 用新 tag 重新 Add，UPM 会替换引用）。</summary>
         private void UpdateFromEntry(CoffeeBeanRegistryEntry entry)
         {
             _installedTags.TryGetValue(entry.id, out string current);
@@ -327,7 +415,7 @@ namespace CoffeeBean.EditorTools
 
             bool isUpdate = _installed.Any(p => p.name == entry.id);
             _busy = true;
-            _status = isUpdate ? $"Updating {entry.id} → {entry.latest}..." : $"Installing {entry.id}...";
+            _status = isUpdate ? $"正在更新 {entry.id} → {entry.latest}..." : $"正在安装 {entry.id}...";
             ModuleInstaller.Install(entry.id, entry.repo, entry.latest, (ok, message) =>
             {
                 _busy = false;
@@ -342,16 +430,16 @@ namespace CoffeeBean.EditorTools
             List<string> dependents = FindDependents(packageId);
             if (dependents.Count > 0)
             {
-                EditorUtility.DisplayDialog("Cannot uninstall",
-                    $"'{packageId}' is required by:\n- {string.Join("\n- ", dependents)}\n\nUninstall those first.",
+                EditorUtility.DisplayDialog("无法卸载",
+                    $"'{packageId}' 被以下模块依赖：\n- {string.Join("\n- ", dependents)}\n\n请先卸载这些模块。",
                     "OK");
                 return;
             }
-            if (!EditorUtility.DisplayDialog("Uninstall module",
-                    $"Remove '{packageId}' from this project?", "Uninstall", "Cancel")) return;
+            if (!EditorUtility.DisplayDialog("卸载模块",
+                    $"从当前工程移除 '{packageId}'？", "卸载", "取消")) return;
 
             _busy = true;
-            _status = $"Uninstalling {packageId}...";
+            _status = $"正在卸载 {packageId}...";
             ModuleInstaller.Uninstall(packageId, (ok, message) =>
             {
                 _busy = false;
