@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.30] - 2026-08-28
+
+
+### Changed
+- 模块目录同步：asset → v0.1.1
+
+# Changelog
+
 ## [0.1.29] - 2026-08-28
 
 ### Changed
