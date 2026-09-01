@@ -40,6 +40,11 @@
       "id": "com.coffeebean.tools",
       "repo": "https://github.com/Herschy0829/com.coffeebean.tools.git",
       "latest": "v0.5.0"
+    },
+    {
+      "id": "com.coffeebean.ui",
+      "repo": "https://github.com/Herschy0829/com.coffeebean.ui.git",
+      "latest": "v0.1.0"
     }
   ]
 }

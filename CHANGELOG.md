@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.23] - 2026-08-28
+
+### Added
+- 模块目录新增 `com.coffeebean.ui`（v0.1.0，UI 模块：UGUI 面板管理 + 代码生成，设计参考 QFramework UIKit + CodeGenKit）
+
 ## [0.1.22] - 2026-08-27
 
 ### Added
