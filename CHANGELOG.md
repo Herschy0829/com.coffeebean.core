@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.1.36] - 2026-08-28
+
+
+### Added
+- **COFFEEBEAN_CORE 宏自动安装**：Core 安装后自动加入全局脚本定义，使各模块 Bridge（Core 集成）真正参与编译（此前宏未定义，Bridge 从未生效）
+
+### Changed
+- 模块目录同步：debug → v0.1.1（接入 Core 生命周期）、ui → v0.2.2（面板遮罩）
+
+# Changelog
+
 ## [0.1.35] - 2026-08-28
 
 

@@ -226,7 +226,7 @@ namespace CoffeeBean.EditorTools
         private const string NavGroupTools = "工具";
 
         /// <summary>框架当前版本（显示用；发布时随 ModuleMarker 同步）。</summary>
-        private const string FrameworkVersion = "0.1.35";
+        private const string FrameworkVersion = "0.1.36";
 
         private void OnGUI()
         {
