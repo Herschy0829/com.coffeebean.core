@@ -4,7 +4,7 @@
     {
       "id": "com.coffeebean.asset",
       "repo": "https://github.com/Herschy0829/com.coffeebean.asset.git",
-      "latest": "v0.2.0"
+      "latest": "v0.2.1"
     },
     {
       "id": "com.coffeebean.debug",
@@ -64,7 +64,7 @@
     {
       "id": "com.coffeebean.ui",
       "repo": "https://github.com/Herschy0829/com.coffeebean.ui.git",
-      "latest": "v0.2.2"
+      "latest": "v0.2.3"
     }
   ]
 }
