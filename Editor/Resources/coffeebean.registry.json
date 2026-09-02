@@ -7,6 +7,11 @@
       "latest": "v0.1.2"
     },
     {
+      "id": "com.coffeebean.debug",
+      "repo": "https://github.com/Herschy0829/com.coffeebean.debug.git",
+      "latest": "v0.1.0"
+    },
+    {
       "id": "com.coffeebean.events",
       "repo": "https://github.com/Herschy0829/com.coffeebean.events.git",
       "latest": "v0.3.0"
