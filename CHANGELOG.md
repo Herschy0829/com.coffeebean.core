@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.34] - 2026-08-28
+
+
+### Added
+- 模块目录新增 `com.coffeebean.input`（v0.1.0，输入抽象模块）
+
+# Changelog
+
 ## [0.1.33] - 2026-08-28
 
 

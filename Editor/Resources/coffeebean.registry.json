@@ -32,6 +32,11 @@
       "latest": "v0.2.0"
     },
     {
+      "id": "com.coffeebean.input",
+      "repo": "https://github.com/Herschy0829/com.coffeebean.input.git",
+      "latest": "v0.1.0"
+    },
+    {
       "id": "com.coffeebean.net",
       "repo": "https://github.com/Herschy0829/com.coffeebean.net.git",
       "latest": "v0.2.0"

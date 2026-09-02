@@ -4,7 +4,7 @@ using CoffeeBean;
 
 [assembly: CoffeeBeanModule(
     "com.coffeebean.core",
-    "0.1.33",
+    "0.1.34",
     DisplayName = "Core",
     Description = "CoffeeBean framework core: module discovery, bootstrap, service registry and module manager."
 )]
