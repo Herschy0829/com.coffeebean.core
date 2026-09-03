@@ -226,14 +226,62 @@ namespace CoffeeBean.EditorTools
         private const string NavGroupTools = "工具";
 
         /// <summary>框架当前版本（显示用；发布时随 ModuleMarker 同步）。</summary>
-        private const string FrameworkVersion = "0.1.41";
+        private const string FrameworkVersion = "0.1.42";
 
         private void OnGUI()
         {
             DrawBrandBar();     // 顶部品牌 + 概览徽章
+            DrawBuildModeBar(); // 构建模式（Beta / Release）切换
             DrawToolbar();      // 操作栏
             DrawBody();         // 主体：左侧导航 + 右侧内容
             DrawStatusBar();    // 底部状态
+        }
+
+        /// <summary>构建模式切换条：显示当前模式 + 一键切 Beta/Release（维护 PlayerSettings 符号）。</summary>
+        private void DrawBuildModeBar()
+        {
+            var target = CBuildModeEditor.ActiveTarget();
+            var mode = CBuildModeEditor.CurrentMode(target);
+            bool isBeta = mode == CBuildModeEditor.Mode.Beta;
+
+            EditorGUILayout.BeginHorizontal(GUI.skin.box);
+            GUILayout.Label("构建模式", EditorStyles.boldLabel);
+            GUILayout.Space(4);
+
+            // 当前模式徽章
+            var badge = new GUIStyle("HelpBox") { alignment = TextAnchor.MiddleCenter, padding = new RectOffset(8, 2, 2, 2) };
+            badge.normal.textColor = isBeta ? new Color(0.15f, 0.55f, 0.25f) : new Color(0.85f, 0.4f, 0.1f);
+            GUILayout.Label(isBeta ? "● Beta" : "● Release", badge);
+            GUILayout.Space(6);
+            GUILayout.Label(CBuildModeEditor.Describe(mode) + "（Editor 下恒有日志）", EditorStyles.miniLabel);
+
+            GUILayout.FlexibleSpace();
+            _applyAllGroups = GUILayout.Toggle(_applyAllGroups, "应用到所有平台组", EditorStyles.miniButtonRight, GUILayout.Width(130));
+
+            if (isBeta)
+            {
+                if (GUILayout.Button("切到 Release", GUILayout.Width(110))) ApplyMode(CBuildModeEditor.Mode.Release);
+            }
+            else
+            {
+                if (GUILayout.Button("切到 Beta", GUILayout.Width(110))) ApplyMode(CBuildModeEditor.Mode.Beta);
+            }
+            EditorGUILayout.EndHorizontal();
+        }
+
+        private bool _applyAllGroups;
+
+        private void ApplyMode(CBuildModeEditor.Mode mode)
+        {
+            int n;
+            if (_applyAllGroups) n = CBuildModeEditor.ApplyModeAll(mode);
+            else
+            {
+                CBuildModeEditor.ApplyModeCurrent(mode);
+                n = 1;
+            }
+            _status = $"{CBuildModeEditor.Describe(mode)}（已应用 {n} 组，脚本将重新编译）";
+            EditorApplication.delayCall += AssetDatabase.Refresh; // 符号变更已自动触发重编译，此处兜底刷新
         }
 
         /// <summary>顶部品牌区：标题 + 版本 + 概览徽章（已装/可装/可更新）。</summary>

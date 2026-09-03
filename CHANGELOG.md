@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.42] - 2026-09-03
+
+### Added
+- **Hub 构建模式切换（Beta/Release）**：Window/CoffeeBean 品牌区下方新增构建模式条——
+  显示当前模式、一键切换 Beta/Release（维护 PlayerSettings 符号 `COFFEEBEAN_DEV_TOOLS`/`COFFEEBEAN_LOG`，
+  保留既有符号），支持"应用到所有平台组"；核心逻辑 `CBuildModeEditor`（可测试）
+- 说明：Editor 下日志恒可用（UNITY_EDITOR 分支），Release 模式用于"模拟正式包 + 打上架包"
+
+### Changed
+- 模块目录 `com.coffeebean.tools` latest → v0.6.0（CLog 构建模式剥离 + CGameBuild）
+- 模块目录 `com.coffeebean.debug` latest → v0.2.0（作弊注册 Conditional + 控制台 #if）
+
 ## [0.1.41] - 2026-09-03
 
 ### Changed
