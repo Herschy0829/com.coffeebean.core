@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.39] - 2026-08-28
+
+
+### Added
+- 模块目录新增 `com.coffeebean.telemetry`（v0.1.0，打点框架：事件缓存 + 热插拔后端）与 `com.coffeebean.ad`（v0.1.0，广告框架：激励/插屏 + 可插拔后端 + 打点联动）
+
+# Changelog
+
 ## [0.1.38] - 2026-08-28
 
 

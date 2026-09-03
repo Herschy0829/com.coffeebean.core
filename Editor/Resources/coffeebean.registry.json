@@ -2,6 +2,11 @@
   "version": 1,
   "modules": [
     {
+      "id": "com.coffeebean.ad",
+      "repo": "https://github.com/Herschy0829/com.coffeebean.ad.git",
+      "latest": "v0.1.0"
+    },
+    {
       "id": "com.coffeebean.asset",
       "repo": "https://github.com/Herschy0829/com.coffeebean.asset.git",
       "latest": "v0.2.2"
@@ -60,6 +65,11 @@
       "id": "com.coffeebean.tools",
       "repo": "https://github.com/Herschy0829/com.coffeebean.tools.git",
       "latest": "v0.5.0"
+    },
+    {
+      "id": "com.coffeebean.telemetry",
+      "repo": "https://github.com/Herschy0829/com.coffeebean.telemetry.git",
+      "latest": "v0.1.0"
     },
     {
       "id": "com.coffeebean.ui",
