@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -226,7 +226,7 @@ namespace CoffeeBean.EditorTools
         private const string NavGroupTools = "工具";
 
         /// <summary>框架当前版本（显示用；发布时随 ModuleMarker 同步）。</summary>
-        private const string FrameworkVersion = "0.1.39";
+        private const string FrameworkVersion = "0.1.40";
 
         private void OnGUI()
         {

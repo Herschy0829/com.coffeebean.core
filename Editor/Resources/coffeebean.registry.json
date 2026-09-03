@@ -1,80 +1,85 @@
-{
-  "version": 1,
-  "modules": [
-    {
-      "id": "com.coffeebean.ad",
-      "repo": "https://github.com/Herschy0829/com.coffeebean.ad.git",
-      "latest": "v0.1.0"
-    },
-    {
-      "id": "com.coffeebean.asset",
-      "repo": "https://github.com/Herschy0829/com.coffeebean.asset.git",
-      "latest": "v0.2.2"
-    },
-    {
-      "id": "com.coffeebean.debug",
-      "repo": "https://github.com/Herschy0829/com.coffeebean.debug.git",
-      "latest": "v0.1.1"
-    },
-    {
-      "id": "com.coffeebean.di",
-      "repo": "https://github.com/Herschy0829/com.coffeebean.di.git",
-      "latest": "v0.1.0"
-    },
-    {
-      "id": "com.coffeebean.events",
-      "repo": "https://github.com/Herschy0829/com.coffeebean.events.git",
-      "latest": "v0.3.0"
-    },
-    {
-      "id": "com.coffeebean.excel",
-      "repo": "https://github.com/Herschy0829/com.coffeebean.excel.git",
-      "latest": "v0.2.3"
-    },
-    {
-      "id": "com.coffeebean.fsm",
-      "repo": "https://github.com/Herschy0829/com.coffeebean.fsm.git",
-      "latest": "v0.2.0"
-    },
-    {
-      "id": "com.coffeebean.input",
-      "repo": "https://github.com/Herschy0829/com.coffeebean.input.git",
-      "latest": "v0.1.0"
-    },
-    {
-      "id": "com.coffeebean.net",
-      "repo": "https://github.com/Herschy0829/com.coffeebean.net.git",
-      "latest": "v0.2.0"
-    },
-    {
-      "id": "com.coffeebean.pooling",
-      "repo": "https://github.com/Herschy0829/com.coffeebean.pooling.git",
-      "latest": "v0.2.0"
-    },
-    {
-      "id": "com.coffeebean.purchase",
-      "repo": "https://github.com/Herschy0829/com.coffeebean.purchase.git",
-      "latest": "v0.2.1"
-    },
-    {
-      "id": "com.coffeebean.save",
-      "repo": "https://github.com/Herschy0829/com.coffeebean.save.git",
-      "latest": "v0.1.0"
-    },
-    {
-      "id": "com.coffeebean.tools",
-      "repo": "https://github.com/Herschy0829/com.coffeebean.tools.git",
-      "latest": "v0.5.0"
-    },
-    {
-      "id": "com.coffeebean.telemetry",
-      "repo": "https://github.com/Herschy0829/com.coffeebean.telemetry.git",
-      "latest": "v0.1.0"
-    },
-    {
-      "id": "com.coffeebean.ui",
-      "repo": "https://github.com/Herschy0829/com.coffeebean.ui.git",
-      "latest": "v0.2.3"
-    }
-  ]
+﻿{
+    "version":  1,
+    "modules":  [
+                    {
+                        "id":  "com.coffeebean.ad",
+                        "repo":  "https://github.com/Herschy0829/com.coffeebean.ad.git",
+                        "latest":  "v0.1.1"
+                    },
+                    {
+                        "id":  "com.coffeebean.build",
+                        "repo":  "https://github.com/Herschy0829/com.coffeebean.build.git",
+                        "latest":  "v0.1.0"
+                    },
+                    {
+                        "id":  "com.coffeebean.asset",
+                        "repo":  "https://github.com/Herschy0829/com.coffeebean.asset.git",
+                        "latest":  "v0.2.2"
+                    },
+                    {
+                        "id":  "com.coffeebean.debug",
+                        "repo":  "https://github.com/Herschy0829/com.coffeebean.debug.git",
+                        "latest":  "v0.1.1"
+                    },
+                    {
+                        "id":  "com.coffeebean.di",
+                        "repo":  "https://github.com/Herschy0829/com.coffeebean.di.git",
+                        "latest":  "v0.1.0"
+                    },
+                    {
+                        "id":  "com.coffeebean.events",
+                        "repo":  "https://github.com/Herschy0829/com.coffeebean.events.git",
+                        "latest":  "v0.3.0"
+                    },
+                    {
+                        "id":  "com.coffeebean.excel",
+                        "repo":  "https://github.com/Herschy0829/com.coffeebean.excel.git",
+                        "latest":  "v0.2.3"
+                    },
+                    {
+                        "id":  "com.coffeebean.fsm",
+                        "repo":  "https://github.com/Herschy0829/com.coffeebean.fsm.git",
+                        "latest":  "v0.2.0"
+                    },
+                    {
+                        "id":  "com.coffeebean.input",
+                        "repo":  "https://github.com/Herschy0829/com.coffeebean.input.git",
+                        "latest":  "v0.1.0"
+                    },
+                    {
+                        "id":  "com.coffeebean.net",
+                        "repo":  "https://github.com/Herschy0829/com.coffeebean.net.git",
+                        "latest":  "v0.2.0"
+                    },
+                    {
+                        "id":  "com.coffeebean.pooling",
+                        "repo":  "https://github.com/Herschy0829/com.coffeebean.pooling.git",
+                        "latest":  "v0.2.0"
+                    },
+                    {
+                        "id":  "com.coffeebean.purchase",
+                        "repo":  "https://github.com/Herschy0829/com.coffeebean.purchase.git",
+                        "latest":  "v0.2.1"
+                    },
+                    {
+                        "id":  "com.coffeebean.save",
+                        "repo":  "https://github.com/Herschy0829/com.coffeebean.save.git",
+                        "latest":  "v0.1.0"
+                    },
+                    {
+                        "id":  "com.coffeebean.tools",
+                        "repo":  "https://github.com/Herschy0829/com.coffeebean.tools.git",
+                        "latest":  "v0.5.0"
+                    },
+                    {
+                        "id":  "com.coffeebean.telemetry",
+                        "repo":  "https://github.com/Herschy0829/com.coffeebean.telemetry.git",
+                        "latest":  "v0.1.0"
+                    },
+                    {
+                        "id":  "com.coffeebean.ui",
+                        "repo":  "https://github.com/Herschy0829/com.coffeebean.ui.git",
+                        "latest":  "v0.2.3"
+                    }
+                ]
 }

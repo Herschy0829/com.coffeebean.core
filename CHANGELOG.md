@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.40] - 2026-09-03
+
+### Added
+- 模块目录新增 `com.coffeebean.build`（v0.1.0，原生导出定制：Android Studio / Xcode 工程导出后处理注入）
+
+### Changed
+- 模块目录 `com.coffeebean.ad` latest → v0.1.1（补全 .meta 修复）
+
 ## [0.1.39] - 2026-08-28
 
 
