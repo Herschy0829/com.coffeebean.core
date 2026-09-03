@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.41] - 2026-09-03
+
+### Changed
+- 模块目录 `com.coffeebean.build` latest → v0.1.1（Google Play 150MB AAB 分包：Play Asset Delivery asset packs）
+
 ## [0.1.40] - 2026-09-03
 
 ### Added
