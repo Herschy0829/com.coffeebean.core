@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.43] - 2026-09-03
+
+### Changed
+- 模块目录 `com.coffeebean.input` latest → v0.1.1（补全 .meta 修复版本化，修复按 tag 拉包时 immutable folder asset ignored 报错）
+
 ## [0.1.42] - 2026-09-03
 
 ### Added
