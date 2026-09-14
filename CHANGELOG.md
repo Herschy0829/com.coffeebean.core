@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.1.44] - 2026-09-14
+
+### Changed
+- **模块目录（registry）同步到各模块最新版本**：`ad → v0.2.0`、`asset → v0.3.0`、`build → v0.2.0`、
+  `di → v0.1.1`、`input → v0.1.2`、`purchase → v0.4.0`、`save → v0.1.1`、`telemetry → v0.1.1`、`ui → v0.2.4`
+  （其余未变：`debug v0.2.0` / `events v0.3.0` / `excel v0.2.3` / `fsm v0.2.0` / `net v0.2.0` /
+  `pooling v0.2.0` / `tools v0.6.0`）。
+  这样打开 `Window > CoffeeBean` 才能看到并可一键升级到这些修复版本。
+- 顺带把 registry JSON 的排版规整为常规 2 空格缩进（原先是从 PowerShell 导出的、冒号后带对齐空格的格式，
+  人工 diff 时噪声很大）。
+
+### Notes
+- 本轮各模块修复的要点（详见各自 CHANGELOG 与 GitHub Release）：
+  `build` iOS PBX 落盘编译错误 + manifest 幂等性；`purchase` ConsumeType 直映对齐设计文档；
+  `telemetry` 后端从未被初始化 + 缓存事件不自动补发；`di` 循环依赖栈溢出；`save` 退出丢档 + `Flush` 不可靠；
+  `asset` Bridge 版本号落后两个版本；`ui` 显示动画从未生效 + 依赖声明缺失；`input` 触屏抬起永不触发；
+  `ad` 删除无用的 `CAdResult`。
+
 ## [0.1.43] - 2026-09-03
 
 ### Changed
