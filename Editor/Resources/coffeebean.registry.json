@@ -51,7 +51,7 @@
     {
       "id": "com.coffeebean.excel",
       "repo": "https://github.com/Herschy0829/com.coffeebean.excel.git",
-      "latest": "v0.2.3",
+      "latest": "v0.3.0",
       "dependencies": []
     },
     {
@@ -93,7 +93,7 @@
     {
       "id": "com.coffeebean.save",
       "repo": "https://github.com/Herschy0829/com.coffeebean.save.git",
-      "latest": "v0.3.0",
+      "latest": "v0.4.0",
       "dependencies": [
         "com.coffeebean.tools"
       ],

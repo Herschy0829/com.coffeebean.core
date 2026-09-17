@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.1.49] - 2026-09-17
+
+### Changed
+- 模块目录同步到各模块最新版本（**纯 registry 同步，无代码变更**）：
+  - `com.coffeebean.save` latest → **v0.4.0**：修掉**多槽位写入被静默丢弃的竞态** ——
+    后台写盘原先只有一个待写信箱，第二次入队直接覆盖第一次，
+    「先写 A 槽、紧接着写 B 槽」时 A 的写会丢，且丢不丢取决于后台线程调度时机。
+    本模块自带的 `SaveDataAuto` 写的正是另一个槽位（`{Slot}_auto`），
+    所以 `SaveData(x)` 紧跟 `SaveDataAuto(x)` 就是真实触发路径。
+    已改为**按槽位**分别暂存（不同槽位互不覆盖，同槽位仍「最新优先」），无 API/存档格式变更。
+  - `com.coffeebean.excel` latest → **v0.3.0**：补上 `[assembly: CoffeeBeanModule]` 模块标记。
+    此前 excel 既无 `Runtime/` 也无标记，Core 完全发现不到它 ——
+    `Window > CoffeeBean` 里看不到，`MinCoreVersion` 校验也覆盖不到。
+    标记放在 **Editor-only** 的 Bridge 程序集里（`includePlatforms: ["Editor"]`）：
+    与本包「Editor-only 配置表工具链」一致，玩家包体不会白带一个空 DLL。
+
 ## [0.1.48] - 2026-09-17
 
 ### Added
