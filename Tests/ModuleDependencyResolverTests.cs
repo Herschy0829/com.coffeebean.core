@@ -708,5 +708,38 @@ namespace CoffeeBean.Tests
                 }
             }
         }
+
+        /// <summary>
+        /// Core 必须登记在目录里，且 <c>latest</c> 等于自己当前的版本 —— 这是"Core 能被更新"的前提。
+        ///
+        /// 来历：registry 里从来没有 Core 的条目，于是「检查更新 / 全部更新」永远看不到 Core，
+        /// 用户只能手改 manifest。而内含的 registry 又是"发版时改一行指针"的地方，
+        /// 两边叠起来就成了死锁：看不到 Core 更新 → 只能手改 → 下一版依然是旧的目录。
+        /// </summary>
+        [Test]
+        public void BuiltInRegistry_RegistersCoreItselfForUpdate()
+        {
+            CoffeeBeanRegistryData registry = RegistrySource.LoadBuiltIn();
+            CoffeeBeanRegistryEntry core = registry.modules.FirstOrDefault(e => e.id == ModuleDependencyResolver.CorePackageId);
+
+            Assert.IsNotNull(core, "registry 里必须有 com.coffeebean.core 条目，否则 Core 永远无法被更新");
+            StringAssert.Contains("com.coffeebean.core", core.repo);
+            StringAssert.StartsWith("https://", core.repo);
+
+            // latest 必须就是当前框架版本（v + package.json 的版本）—— 发 Core 忘了改这行会立刻红
+            Assert.AreEqual("v" + ModuleManagerWindow.FrameworkVersion, core.latest,
+                "registry 里 Core 的 latest 必须与当前框架版本一致（发版时要同步改，否则用户看不到这次 Core 更新）");
+        }
+
+        /// <summary>Core 条目不能声明依赖，否则会被卷进别人的安装计划。</summary>
+        [Test]
+        public void BuiltInRegistry_CoreEntryHasNoDependencies()
+        {
+            CoffeeBeanRegistryData registry = RegistrySource.LoadBuiltIn();
+            CoffeeBeanRegistryEntry core = registry.modules.First(e => e.id == ModuleDependencyResolver.CorePackageId);
+
+            Assert.IsTrue(core.dependencies == null || core.dependencies.Length == 0,
+                "Core 是框架的根模块，不应声明任何 com.coffeebean.* 依赖");
+        }
     }
 }

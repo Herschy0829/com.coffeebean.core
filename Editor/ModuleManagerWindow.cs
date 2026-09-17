@@ -34,6 +34,12 @@ namespace CoffeeBean.EditorTools
         private string _status = "就绪。";
         private bool _busy;
 
+        // 目录来源与远程拉取状态（用于把"这份结论是哪来的"如实告诉用户）
+        private string _registrySource = "内置（随 Core 版本）";
+        private bool _remoteLoading;
+        private bool _remoteRegistryFailed;
+        private DateTime _lastRemoteAttemptUtc = DateTime.MinValue;
+
         // ========== 工具导航 ==========
         private List<CoffeeBeanToolRegistry.ToolEntry> _tools = new List<CoffeeBeanToolRegistry.ToolEntry>();
         private Vector2 _toolsScroll;
@@ -52,16 +58,52 @@ namespace CoffeeBean.EditorTools
 
         private void OnEnable()
         {
-            _remoteUrl = EditorPrefs.GetString(RegistrySource.RemoteUrlPrefKey, string.Empty);
+            // 默认就是官方远程目录（见 RegistrySource.DefaultRemoteUrl）—— 内置目录只随 Core 版本更新，
+            // 只信内置目录必然漏报"刚发出去的那些版本"。
+            _remoteUrl = RegistrySource.ResolveUrl();
             _tools = CoffeeBeanToolRegistry.Scan();
             _selectedTool = BuiltinModuleManager;
             Refresh();
         }
 
+        /// <summary>
+        /// 先用内置目录把界面点亮（无网络也能用），紧接着异步拉一次远程目录覆盖它。
+        /// </summary>
         private void Refresh()
         {
             _registry = RegistrySource.LoadBuiltIn();
+            _registrySource = "内置（随 Core 版本）";
             ReloadInstalled();
+            RefreshRegistryFromRemote();
+        }
+
+        /// <summary>
+        /// 异步拉远程目录。失败**不抛也不静默**：记下状态，由工具栏徽章与「检查更新」如实说明。
+        /// 60 秒内不重复拉（域重载/开窗会频繁触发，没必要每次都打网络）。
+        /// </summary>
+        private void RefreshRegistryFromRemote()
+        {
+            if (string.IsNullOrEmpty(_remoteUrl) || _remoteLoading) return;
+            if ((DateTime.UtcNow - _lastRemoteAttemptUtc).TotalSeconds < 60) return;
+
+            _lastRemoteAttemptUtc = DateTime.UtcNow;
+            _remoteLoading = true;
+            RegistrySource.LoadRemote(_remoteUrl, data =>
+            {
+                _remoteLoading = false;
+                if (data != null && data.modules.Count > 0)
+                {
+                    _registry = data;
+                    _registrySource = "远程（" + _remoteUrl + "）";
+                    _remoteRegistryFailed = false;
+                }
+                else
+                {
+                    _remoteRegistryFailed = true;
+                    _registrySource = "内置（随 Core 版本）· 远程拉取失败";
+                }
+                Repaint();
+            });
         }
 
         /// <summary>
@@ -147,34 +189,57 @@ namespace CoffeeBean.EditorTools
 
         // ========== 检查更新 ==========
 
-        /// <summary>检查已安装模块是否有更新：registry 优先用远程（若配置了 URL），否则用内置。</summary>
+        /// <summary>
+        /// 检查已安装模块是否有更新：以**远程目录**为准。
+        ///
+        /// 内置目录的新鲜度 == 已装 Core 的版本，所以只按内置目录判断会得出
+        /// "所有模块已是最新"这种**错误结论**（实测踩到：tools 已发 0.10.0，内置目录还写着 0.9.0）。
+        /// 远程拉取失败时也**明说**，而不是拿一个可信度未知的结论去回答用户。
+        /// </summary>
         private void CheckForUpdates()
         {
-            if (!string.IsNullOrEmpty(_remoteUrl))
+            if (string.IsNullOrEmpty(_remoteUrl))
             {
-                _busy = true;
-                _status = "检查更新（远程 registry）...";
-                RegistrySource.LoadRemote(_remoteUrl, data =>
+                ReloadInstalled(() => ShowUpdateResult("未配置远程目录地址，只能按内置目录判断（可能漏报更新）。"));
+                return;
+            }
+
+            _busy = true;
+            _status = "检查更新（远程目录）...";
+            RegistrySource.LoadRemote(_remoteUrl, data =>
+            {
+                _busy = false;
+                if (data != null && data.modules.Count > 0)
                 {
-                    _busy = false;
-                    if (data != null && data.modules.Count > 0) _registry = data;
-                    ReloadInstalled(ShowUpdateResult);
-                });
-            }
-            else
-            {
-                ReloadInstalled(ShowUpdateResult);
-            }
+                    _registry = data;
+                    _registrySource = "远程（" + _remoteUrl + "）";
+                    _remoteRegistryFailed = false;
+                    ReloadInstalled(() => ShowUpdateResult(null));
+                    return;
+                }
+
+                _remoteRegistryFailed = true;
+                _registrySource = "内置（随 Core 版本）· 远程拉取失败";
+                ReloadInstalled(() => ShowUpdateResult(
+                    $"远程目录拉取失败：{_remoteUrl}\n" +
+                    "已退回**内置目录**判断 —— 内置目录只随 Core 版本更新，所以下面的结论可能漏报更新。\n" +
+                    "请检查网络，或在工具栏右侧改成一个可达的地址（内网镜像）后重试。"));
+            });
         }
 
-        private void ShowUpdateResult()
+        /// <param name="caveat">结论可信度说明；null 表示目录来源可靠。</param>
+        private void ShowUpdateResult(string caveat)
         {
             var updatable = _installed.Where(p => IsOutdated(p.name, out _)).ToList();
 
             if (updatable.Count == 0)
             {
-                _status = "所有模块已是最新版本。";
-                EditorUtility.DisplayDialog("检查更新", "所有已安装模块已是最新版本。", "OK");
+                _status = caveat == null ? "所有模块已是最新版本。" : caveat.Replace("\n", " ");
+                EditorUtility.DisplayDialog("检查更新",
+                    caveat == null
+                        ? "所有已安装模块已是最新版本。"
+                        : "没有发现可更新的模块。\n\n⚠ " + caveat,
+                    "OK");
                 Repaint();
                 return;
             }
@@ -184,10 +249,11 @@ namespace CoffeeBean.EditorTools
                 _installedTags.TryGetValue(p.name, out string cur);
                 IsOutdated(p.name, out string latest);
                 return $"- {p.name}: {(string.IsNullOrEmpty(cur) ? "?" : cur)} → {latest}";
-            });
+            }).ToList();
             _status = $"发现 {updatable.Count} 个可更新模块。";
             bool updateAll = EditorUtility.DisplayDialog("发现更新",
-                string.Join("\n", lines) + "\n\n是否立即全部更新？", "全部更新", "稍后");
+                string.Join("\n", lines) + (caveat == null ? string.Empty : "\n\n⚠ " + caveat) +
+                "\n\n是否立即全部更新？", "全部更新", "稍后");
             if (updateAll)
             {
                 // 一次 UPM 请求提交整批。原来是在循环里逐个 InstallFromEntry，
@@ -239,6 +305,15 @@ namespace CoffeeBean.EditorTools
 
         internal static int CompareTags(string a, string b)
             => CoffeeBeanVersion.Compare(a, b);
+
+        /// <summary>
+        /// 是不是 Core 自己。Core **可以更新**（更新后 Core 也登记在 registry 里了），
+        /// 但**绝不能被卸载** —— 框架工具中心（本窗口）与模块安装器都住在它里面，
+        /// 卸载掉就是"把正在用的螺丝刀一起扔了"，工程还会立刻编译不过。
+        /// </summary>
+        internal static bool IsCorePackage(string packageId)
+            => !string.IsNullOrEmpty(packageId)
+               && string.Equals(packageId, ModuleDependencyResolver.CorePackageId, StringComparison.OrdinalIgnoreCase);
 
         // ========== GUI ==========
 
@@ -439,8 +514,22 @@ namespace CoffeeBean.EditorTools
             if (GUILayout.Button("一键卸载所有依赖", EditorStyles.toolbarButton)) RunBatchUninstall();
             GUI.enabled = true;
             GUILayout.FlexibleSpace();
+            // 目录来源必须可见：内置目录只随 Core 版本更新，用户需要知道"我现在看到的清单新不新"
+            GUILayout.Label(_remoteLoading ? "目录：拉取中…" : "目录：" + _registrySource,
+                EditorStyles.miniLabel);
+            if (_remoteRegistryFailed)
+            {
+                if (GUILayout.Button("重试拉取", EditorStyles.toolbarButton)) RetryRemoteRegistry();
+            }
             _remoteUrl = EditorGUILayout.TextField(_remoteUrl, GUILayout.MinWidth(220));
             EditorGUILayout.EndHorizontal();
+        }
+
+        /// <summary>手动重试远程目录（跳过 60 秒节流）。</summary>
+        private void RetryRemoteRegistry()
+        {
+            _lastRemoteAttemptUtc = DateTime.MinValue;
+            RefreshRegistryFromRemote();
         }
 
         private void DrawBody()
@@ -614,7 +703,16 @@ namespace CoffeeBean.EditorTools
                     CoffeeBeanRegistryEntry entry = FindRegistryEntry(pkg.name);
                     if (entry != null && GUILayout.Button("更新", GUILayout.Width(60))) UpdateFromEntry(entry);
                 }
-                if (GUILayout.Button("卸载", GUILayout.Width(60))) ConfirmUninstallByName(pkg.name);
+                if (IsCorePackage(pkg.name))
+                {
+                    // Core 不给卸载按钮：窗口与安装器都在它里面（这里原来是有按钮的，
+                    // 只要工程里没有别的模块依赖 core，FindDependents 返回空 → 真能卸掉）
+                    GUILayout.Label("核心模块", EditorStyles.miniLabel, GUILayout.Width(60));
+                }
+                else if (GUILayout.Button("卸载", GUILayout.Width(60)))
+                {
+                    ConfirmUninstallByName(pkg.name);
+                }
                 EditorGUILayout.EndHorizontal();
                 EditorGUILayout.Space(2);
             }
@@ -739,10 +837,14 @@ namespace CoffeeBean.EditorTools
         [MenuItem("Tools/CoffeeBean/一键卸载所有依赖", false, 201)]
         public static void UninstallAllModulesFromMenu() => RunBatchUninstall();
 
-        /// <summary>取模块目录：配了远程地址就走远程，失败或未配则用内置。</summary>
+        /// <summary>
+        /// 取模块目录：默认走**远程**（<see cref="RegistrySource.ResolveUrl"/>，官方 main），
+        /// 失败或未配置则退回内置。菜单入口（一键安装/卸载）与窗口必须用同一份目录，
+        /// 否则会出现"窗口说有更新、菜单却按旧目录装"这种自相矛盾。
+        /// </summary>
         private static void WithRegistry(Action<CoffeeBeanRegistryData> action)
         {
-            string url = EditorPrefs.GetString(RegistrySource.RemoteUrlPrefKey, string.Empty);
+            string url = RegistrySource.ResolveUrl();
             if (string.IsNullOrEmpty(url))
             {
                 action(RegistrySource.LoadBuiltIn());
@@ -958,6 +1060,15 @@ namespace CoffeeBean.EditorTools
 
         private void ConfirmUninstallByName(string packageId)
         {
+            // 兜底：按钮已经不给 Core 了，但批量入口 / 以后新增的入口也得挡住
+            if (IsCorePackage(packageId))
+            {
+                EditorUtility.DisplayDialog("无法卸载",
+                    "Core 不能卸载：框架工具中心（本窗口）与模块安装器都住在它里面。\n\n" +
+                    "要换版本请用「更新」，或直接改 Packages/manifest.json 里的引用。", "OK");
+                return;
+            }
+
             List<string> dependents = FindDependents(packageId);
             if (dependents.Count > 0)
             {

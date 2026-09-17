@@ -2,6 +2,12 @@
   "version": 2,
   "modules": [
     {
+      "id": "com.coffeebean.core",
+      "repo": "https://github.com/Herschy0829/com.coffeebean.core.git",
+      "latest": "v0.1.58",
+      "dependencies": []
+    },
+    {
       "id": "com.coffeebean.ad",
       "repo": "https://github.com/Herschy0829/com.coffeebean.ad.git",
       "latest": "v0.2.0",

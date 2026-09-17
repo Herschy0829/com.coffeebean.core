@@ -1,5 +1,50 @@
 # Changelog
 
+## [0.1.58] - 2026-09-17
+
+### Fixed
+- **「检查更新」谎报"所有模块已是最新版本"** —— 用户实测踩到：tools 已经发到 v0.10.0，
+  窗口却说全部最新。
+
+  根因是**内置目录只随 Core 版本更新**：`registry.json` 编译进 Core 包，
+  Core 0.1.56 的内置目录里 `com.coffeebean.tools` 还写着 `v0.9.0`；
+  而 `检查更新` 只在"用户手工填过远程地址"（`EditorPrefs: CoffeeBean.RegistryUrl`，默认空）时才拉远程，
+  否则就拿这份陈旧目录去比对 —— 于是必然"已是最新"。
+
+  于是形成了死锁：**想看到工具模块的更新得先更新 Core，想更新 Core 又得先看到更新。**
+
+  三处修改：
+  1. `RegistrySource.DefaultRemoteUrl`：官方 `main` 分支上那份目录成为**默认**来源，
+     `ResolveUrl()` = EditorPrefs 有值用它、否则用默认。**目录随发布走，不再随 Core 版本走**；
+     内网/镜像仍可覆盖（含"锁定某个分支"这种用法）。
+  2. 开窗/刷新时**异步拉一次**远程目录覆盖内置目录（60 秒节流，失败不影响离线可用），
+     工具栏上常驻显示 `目录：内置（随 Core 版本）/ 远程（URL）` —— 用户能一眼看出这份清单新不新。
+  3. **远程拉取失败时不再冒充结论**：对话框明确写出"已退回内置目录，结论可能漏报更新"，
+     并给出网络/镜像提示；工具栏同时出现「重试拉取」。
+
+- **Core 自己永远无法更新**（只能手改 `manifest.json`）。`registry.json` 里从来没有 Core 的条目，
+  所以「检查更新 / 全部更新」永远看不到它 —— 上面那个死锁的另一半。
+  现在 Core 作为普通条目登记（`repo` + `latest`），可以像别的模块一样被更新。
+
+- **Core 可以从窗口里被卸载**（顺带发现的、同族的隐患）。已安装列表里每一行都有「卸载」按钮，
+  而 `ConfirmUninstallByName` 只用 `FindDependents`（谁依赖我）做保护 ——
+  工程里若只有 Core + tools（tools 不依赖 Core），依赖者列表为空，**真能卸掉**，
+  后果是框架工具中心与模块安装器一起消失、工程立刻编译不过。
+  现在：Core 行不给卸载按钮（显示"核心模块"），并且 `ConfirmUninstallByName` 里再加一道兜底拦截。
+
+### Added
+- `RegistrySource.DefaultRemoteUrl` / `RegistrySource.ResolveUrl()`（新的目录来源约定）。
+- `ModuleManagerWindow.IsCorePackage(string)`（internal，带测试）。
+
+### Tests
+- 新增 `BuiltInRegistry_RegistersCoreItselfForUpdate`：Core 必须登记在目录里、
+  `latest` 必须是 **`v` + 当前框架版本**（与 package.json、模块标记三方一致）——
+  以后发 Core 忘了改这一行会直接红。
+- 新增 `BuiltInRegistry_CoreEntryHasNoDependencies`：Core 条目不能声明依赖，
+  否则会被卷进别人的安装计划。
+- 新增 `IsCorePackage_MatchesOnlyCore`：大小写不敏感、null/空/前缀相似（`com.coffeebean.corex`）都必须是 false。
+- Core 测试 78 → 83，全量 EditMode **677 → 682 全绿**。
+
 ## [0.1.57] - 2026-09-17
 
 ### Changed

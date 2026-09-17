@@ -73,8 +73,14 @@ namespace CoffeeBean.EditorTools
     public static class ModuleDependencyResolver
     {
         /// <summary>
-        /// Core 自身永远视为「已存在」：它不登记在 registry 里（否则用户能把它当普通模块装卸，
-        /// 而 ModuleManager 就住在 Core 内），但 events 等模块声明了依赖它。
+        /// Core 自身的包名。
+        ///
+        /// Core **登记在 registry 里**（v0.1.58 起），但只为了让它**能被更新** ——
+        /// 否则"想看到 Core 的更新得先更新 Core"是个死锁，用户永远只能手改 manifest。
+        /// 它与其他模块的区别只有两条，都在 ModuleManagerWindow 里守住：
+        /// · 从未安装过 Core 的工程不存在（本窗口就住在 Core 内），所以它永远不会出现在"可安装"列表；
+        /// · **永远不给卸载入口**（卸载 Core = 把正在用的螺丝刀一起扔了）。
+        /// 至于"模块声明依赖 Core"，那些声明照旧被忽略：Core 恒定存在，不该进安装计划。
         /// </summary>
         public const string CorePackageId = "com.coffeebean.core";
 

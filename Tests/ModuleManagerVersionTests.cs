@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Text.RegularExpressions;
 using CoffeeBean.EditorTools;
 using NUnit.Framework;
+using UnityEditor;
 using UnityEditor.PackageManager;
 using PackageInfo = UnityEditor.PackageManager.PackageInfo;
 
@@ -96,6 +97,71 @@ namespace CoffeeBean.Tests
         {
             Assert.Less(ModuleManagerWindow.CompareTags("v0.9.9", "v1.0.0"), 0);
             Assert.Greater(ModuleManagerWindow.CompareTags("v2.0.0", "v1.99.99"), 0);
+        }
+
+        // ========== Core 不能被卸载 ==========
+
+        /// <summary>
+        /// Core 可以更新，但**永远不能**被卸载：框架工具中心（窗口）与模块安装器都住在它里面。
+        /// 这里是按钮与兜底拦截共用的判定。
+        /// </summary>
+        [Test]
+        public void IsCorePackage_MatchesOnlyCore()
+        {
+            Assert.IsTrue(ModuleManagerWindow.IsCorePackage("com.coffeebean.core"));
+            Assert.IsTrue(ModuleManagerWindow.IsCorePackage("COM.COFFEEBEAN.CORE"), "包名比较应忽略大小写");
+
+            Assert.IsFalse(ModuleManagerWindow.IsCorePackage("com.coffeebean.tools"));
+            Assert.IsFalse(ModuleManagerWindow.IsCorePackage("com.coffeebean.corex"), "前缀相似不是同一个包");
+            Assert.IsFalse(ModuleManagerWindow.IsCorePackage("core"));
+            Assert.IsFalse(ModuleManagerWindow.IsCorePackage(null));
+            Assert.IsFalse(ModuleManagerWindow.IsCorePackage(string.Empty));
+        }
+
+        // ========== 目录来源 ==========
+
+        /// <summary>
+        /// 默认远程目录必须指向官方 Core 仓库 main 上的 registry.json。
+        ///
+        /// 这条锁的是那个"检查更新谎报最新"的根因：内置目录只随 Core 版本更新，
+        /// 一旦默认地址丢了/写错，用户又会退回到"只能看到自己装的 Core 那一版的清单"。
+        /// </summary>
+        [Test]
+        public void DefaultRemoteUrl_PointsAtOfficialRegistryOnMain()
+        {
+            StringAssert.StartsWith("https://", RegistrySource.DefaultRemoteUrl);
+            StringAssert.Contains("Herschy0829/com.coffeebean.core", RegistrySource.DefaultRemoteUrl);
+            StringAssert.Contains("/main/", RegistrySource.DefaultRemoteUrl);
+            StringAssert.EndsWith("Editor/Resources/coffeebean.registry.json", RegistrySource.DefaultRemoteUrl);
+        }
+
+        /// <summary>ResolveUrl：EditorPrefs 有配置就用配置，没有才用官方默认地址。</summary>
+        [Test]
+        public void ResolveUrl_PrefOverridesDefault()
+        {
+            string original;
+            bool hadPref = EditorPrefs.HasKey(RegistrySource.RemoteUrlPrefKey);
+            original = EditorPrefs.GetString(RegistrySource.RemoteUrlPrefKey, string.Empty);
+
+            try
+            {
+                EditorPrefs.DeleteKey(RegistrySource.RemoteUrlPrefKey);
+                Assert.AreEqual(RegistrySource.DefaultRemoteUrl, RegistrySource.ResolveUrl(),
+                    "没有配置时应回落到官方默认地址（而不是空 → 退回内置目录）");
+
+                EditorPrefs.SetString(RegistrySource.RemoteUrlPrefKey, "https://internal.example/registry.json");
+                Assert.AreEqual("https://internal.example/registry.json", RegistrySource.ResolveUrl(),
+                    "配置过就一律以配置为准（内网镜像）");
+
+                EditorPrefs.SetString(RegistrySource.RemoteUrlPrefKey, string.Empty);
+                Assert.AreEqual(RegistrySource.DefaultRemoteUrl, RegistrySource.ResolveUrl(),
+                    "显式清空也应回落到默认地址，而不是退回内置目录");
+            }
+            finally
+            {
+                if (hadPref) EditorPrefs.SetString(RegistrySource.RemoteUrlPrefKey, original);
+                else EditorPrefs.DeleteKey(RegistrySource.RemoteUrlPrefKey);
+            }
         }
     }
 }
