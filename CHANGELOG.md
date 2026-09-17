@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.1.53] - 2026-09-17
+
+### Changed
+- 模块目录 `com.coffeebean.tools` latest → **v0.9.0**（**纯 registry 同步，无代码变更**）：
+  tools 新增**通用 Loading 框** —— `CLoading`（门面）+ `UILoading`（视图）+ 预制体/材质/着色器，
+  预制体随包发布在 `Runtime/Resources/CoffeeBean/LoadingCanvas.prefab`，零配置即可用。
+
+  ```csharp
+  CLoading.Show();
+  CLoading.Hide();
+  using (CLoading.Scope("加载中...")) { await LoadSomething(); }  // 异常路径也自动收起
+  ```
+
+  特点：**引用计数**（嵌套/并发 Show 累加，归零才隐藏）、**线程安全**（非主线程经
+  `MainThreadDispatcher` 投递）、预制体来源可替换（显式 Prefab → Provider → Resources）。
+
+  同时修掉初版的一批缺陷：自动隐藏的游离定时器会误关后来的 Show、没有 `DontDestroyOnLoad`
+  导致切场景丢遮罩、`SetAsFirstSibling()` 把遮罩放到最底层、`Resources.Load` 路径与实际不符、
+  `async void` 吞异常、`uiLoading` 死字段。
+
+  ⚠️ tools 现在声明依赖 **`com.unity.ugui`**（loading 用到 UGUI）。
+
 ## [0.1.52] - 2026-09-17
 
 ### Changed
