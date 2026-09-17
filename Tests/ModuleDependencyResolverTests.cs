@@ -450,6 +450,89 @@ namespace CoffeeBean.Tests
             Assert.AreEqual(1, Ids(plan).Count(id => id == "com.shared"));
         }
 
+        // ========== 只装缺的（一键安装所有依赖） ==========
+
+        [Test]
+        public void Resolve_ExcludePresentTarget_SkipsIt()
+        {
+            var registry = Registry(Entry("com.a", "v1.0.0"));
+
+            ModuleInstallPlan plan = ModuleDependencyResolver.Resolve(
+                registry, "com.a", new[] { "com.a" }, includeTargetIfPresent: false);
+
+            Assert.IsFalse(plan.HasErrors, plan.Error);
+            Assert.IsEmpty(plan.Packages, "已装的目标不该再进计划，否则等于把整个目录重装一遍");
+        }
+
+        [Test]
+        public void Resolve_ExcludePresentTarget_AbsentTargetStillPlanned()
+        {
+            var registry = Registry(Entry("com.a", "v1.0.0"));
+
+            ModuleInstallPlan plan = ModuleDependencyResolver.Resolve(
+                registry, "com.a", new string[0], includeTargetIfPresent: false);
+
+            Assert.AreEqual(new List<string> { "com.a" }, Ids(plan));
+        }
+
+        [Test]
+        public void Resolve_ExcludePresentTarget_MissingDependencyStillPlanned()
+        {
+            // 目标已装、依赖缺失：只补依赖，不重装目标
+            var registry = Registry(
+                Entry("com.tools"),
+                Entry("com.save", deps: new[] { "com.tools" }));
+
+            ModuleInstallPlan plan = ModuleDependencyResolver.Resolve(
+                registry, "com.save", new[] { "com.save" }, includeTargetIfPresent: false);
+
+            Assert.AreEqual(new List<string> { "com.tools" }, Ids(plan));
+        }
+
+        [Test]
+        public void ResolveMany_ExcludePresentTargets_OnlyMissingPlanned()
+        {
+            var registry = Registry(
+                Entry("com.tools"),
+                Entry("com.asset", deps: new[] { "com.tools" }),
+                Entry("com.ui", deps: new[] { "com.tools", "com.asset" }));
+
+            // tools 与 asset 已装，只有 ui 缺
+            ModuleInstallPlan plan = ModuleDependencyResolver.ResolveMany(
+                registry, new[] { "com.tools", "com.asset", "com.ui" },
+                new[] { "com.tools", "com.asset" }, includePresentTargets: false);
+
+            Assert.IsFalse(plan.HasErrors, plan.Error);
+            Assert.AreEqual(new List<string> { "com.ui" }, Ids(plan));
+        }
+
+        [Test]
+        public void ResolveMany_ExcludePresentTargets_AllPresent_EmptyPlan()
+        {
+            var registry = Registry(
+                Entry("com.tools"),
+                Entry("com.ui", deps: new[] { "com.tools" }));
+
+            ModuleInstallPlan plan = ModuleDependencyResolver.ResolveMany(
+                registry, new[] { "com.tools", "com.ui" },
+                new[] { "com.tools", "com.ui" }, includePresentTargets: false);
+
+            Assert.IsFalse(plan.HasErrors, plan.Error);
+            Assert.IsEmpty(plan.Packages, "全装好了就该是空计划 —— 界面据此提示「无需操作」");
+        }
+
+        [Test]
+        public void ResolveMany_IncludePresentTargets_BehavesLikeUpdate()
+        {
+            var registry = Registry(Entry("com.a", "v2.0.0"));
+
+            ModuleInstallPlan plan = ModuleDependencyResolver.ResolveMany(
+                registry, new[] { "com.a" }, new[] { "com.a" }, includePresentTargets: true);
+
+            Assert.AreEqual(new List<string> { "com.a" }, Ids(plan), "更新语义：已装的也要重新 Add 到 latest");
+            StringAssert.EndsWith("#v2.0.0", plan.Packages[0].Url);
+        }
+
         // ========== 卸载顺序（一键卸载所有依赖） ==========
 
         [Test]

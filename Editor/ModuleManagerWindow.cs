@@ -189,8 +189,9 @@ namespace CoffeeBean.EditorTools
                 string.Join("\n", lines) + "\n\n是否立即全部更新？", "全部更新", "稍后");
             if (updateAll)
             {
-                // 必须走批量串行：原来是在循环里逐个 InstallFromEntry，
-                // 而每次都启动一条异步 Client.Add 链 —— N 个模块同时发起会互相打架。
+                // 一次 UPM 请求提交整批。原来是在循环里逐个 InstallFromEntry，
+                // 每次都启动一条异步 Client.Add 链 —— N 个模块同时发起会互相打架；
+                // 后来改成逐个串行又会被域重载断链。现在统一走 AddAndRemove 一次性提交。
                 var ids = new List<string>();
                 foreach (PackageInfo p in updatable)
                 {
@@ -200,16 +201,17 @@ namespace CoffeeBean.EditorTools
                 if (ids.Count > 0)
                 {
                     _busy = true;
-                    _status = $"正在更新 {ids.Count} 个模块（串行）...";
-                    ModuleInstaller.InstallMany(_registry, ids,
-                        (ok, message) =>
+                    _status = $"正在更新 {ids.Count} 个模块...";
+                    // includePresentTargets: true —— 更新的语义就是"把已装的重新 Add 到 latest"
+                    ModuleInstaller.InstallMany(_registry, ids, includePresentTargets: true,
+                        onCompleted: (ok, message) =>
                         {
                             _busy = false;
                             _status = message;
                             ReloadInstalled();
                             Repaint();
                         },
-                        BatchProgress("更新"));
+                        onProgress: BatchProgress("更新"));
                 }
             }
             Repaint();
@@ -694,6 +696,20 @@ namespace CoffeeBean.EditorTools
             if (refreshInstalled) RefreshOpenWindows();
         }
 
+        /// <summary>
+        /// 域重载后清掉可能残留的忙碌标记与进度条。
+        ///
+        /// 批量操作会跨域重载（装/卸包必然触发重编译），而挂在旧域上的完成回调不一定还会被调用；
+        /// 一旦没人清，"进行中"的状态就永远留在界面上 —— 表现就是 Unity 卡死。
+        /// 这里做一次兜底（现在批量走单次 UPM 请求、且不再用模态进度条，但保险留着）。
+        /// </summary>
+        [InitializeOnLoadMethod]
+        private static void ClearStaleBatchState()
+        {
+            _batchRunning = false;
+            EditorUtility.ClearProgressBar();
+        }
+
         private static void SetWindowStatus(string status)
         {
             foreach (ModuleManagerWindow window in Resources.FindObjectsOfTypeAll<ModuleManagerWindow>())
@@ -712,12 +728,22 @@ namespace CoffeeBean.EditorTools
             }
         }
 
+        /// <summary>
+        /// 进度汇报：只更新窗口状态文本，**不用模态进度条**。
+        ///
+        /// 批量现在是一次 UPM 请求，本来就没有细粒度进度；而模态进度条一旦因为域重载
+        /// 拿不到完成回调就会永远留在屏幕上（看起来就是 Unity 卡死）。所以这里只写状态栏。
+        /// </summary>
         private static Action<int, int, string> BatchProgress(string verb)
-            => (done, total, id) =>
-                EditorUtility.DisplayProgressBar(BatchTitle, $"{verb} {done + 1}/{total}：{id}",
-                    total <= 0 ? 0f : (float)done / total);
+            => (done, total, id) => SetWindowStatus(total <= 0 ? $"{verb}中..." : $"{verb} {total} 个模块（一次 UPM 请求）...");
 
-        /// <summary>一键安装：把 registry 里登记的全部模块装上（含各自依赖，依赖优先）。</summary>
+        /// <summary>
+        /// 一键安装：把 registry 里**还没装**的模块装上（含各自缺失依赖，依赖优先）。
+        ///
+        /// 只装缺的：已安装的不进计划。否则会把整个目录原样重装一遍 —— 既慢又毫无意义，
+        /// 而且是之前"Unity 卡死"的直接原因（N 个包 = N 次依赖图求解 + N 次域重载）。
+        /// 想升级已装的模块，用「检查更新 → 全部更新」。
+        /// </summary>
         public static void RunBatchInstall()
         {
             if (!BeginBatch("正在解析模块目录...")) return;
@@ -737,23 +763,46 @@ namespace CoffeeBean.EditorTools
                     return;
                 }
 
+                // includePresentTargets: false —— 已安装的目标不进计划
+                ModuleInstallPlan plan = ModuleDependencyResolver.ResolveMany(
+                    registry, targets, ModuleInstaller.GetRegisteredPackageIds(), includePresentTargets: false);
+
+                if (plan.HasErrors)
+                {
+                    EndBatch(plan.Error, false);
+                    EditorUtility.DisplayDialog(BatchTitle, plan.Error, "OK");
+                    return;
+                }
+
+                if (plan.Packages.Count == 0)
+                {
+                    EndBatch("全部模块都已安装，无需操作。", false);
+                    EditorUtility.DisplayDialog(BatchTitle,
+                        $"registry 里的 {targets.Count} 个模块都已经装好了，没有需要补装的依赖。", "OK");
+                    return;
+                }
+
+                var lines = new List<string>();
+                foreach (PlannedPackage package in plan.Packages)
+                {
+                    lines.Add("- " + package.ToString() + (package.IsTarget ? string.Empty : "   [依赖]"));
+                }
+
                 if (!EditorUtility.DisplayDialog(BatchTitle,
-                        $"将安装 / 更新 registry 中的全部 {targets.Count} 个模块，" +
-                        "各自的依赖会自动优先补装：\n\n" +
-                        string.Join("\n", targets.ConvertAll(id => "- " + id)) +
+                        $"registry 共 {targets.Count} 个模块，其中 {plan.Packages.Count} 个需要安装" +
+                        "（已安装的会跳过；依赖优先补装）：\n\n" +
+                        string.Join("\n", lines) +
                         "\n\n继续？", "全部安装", "取消"))
                 {
                     EndBatch("已取消。", false);
                     return;
                 }
 
-                ModuleInstaller.InstallMany(registry, targets,
-                    (ok, message) =>
-                    {
-                        EndBatch(message, true);
-                        EditorUtility.DisplayDialog(ok ? "安装完成" : "安装失败", message, "OK");
-                    },
-                    BatchProgress("安装"));
+                ModuleInstaller.InstallPlan(plan, null, (ok, message) =>
+                {
+                    EndBatch(message, true);
+                    EditorUtility.DisplayDialog(ok ? "安装完成" : "安装失败", message, "OK");
+                });
             });
         }
 

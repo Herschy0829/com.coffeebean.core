@@ -1,5 +1,44 @@
 # Changelog
 
+## [0.1.55] - 2026-09-17
+
+### Fixed
+- **「一键安装所有依赖」会把整个目录重装一遍**：`Resolve` 里"目标模块永远进计划"是为了让
+  「首次安装」与「更新到指定 tag」共用一条路径，但批量场景下这个语义是错的 ——
+  16 个模块全部被当成目标，已安装的也会被重新 Add。
+  新增 `includeTargetIfPresent` / `includePresentTargets` 开关：
+  **一键安装所有依赖传 `false`（只装缺的，已装的跳过）**；
+  批量更新仍传 `true`（更新语义就是"把已装的重新 Add 到 latest"）。
+  确认框现在也会明确写出"共 N 个模块，其中 M 个需要安装"。
+
+- **批量操作会把 Unity 卡死**（两个原因叠加）：
+  1. **逐个 `Client.Add` 太慢**：每次调用都会让 UPM **重新求解一遍依赖图**
+     （Unity 文档原话：`AddAndRemove` "only has to solve the dependency list once,
+     instead of constructing a new dependency graph after each call"），
+     N 个包 = N 次求解 + N 次脚本导入/域重载；
+  2. **更致命的是会断链**：完成通知挂在 `EditorApplication.update` 上，而**域重载会丢掉
+     旧域里注册的回调** —— 链一断完成回调永不触发，界面上"进行中"的状态就再也清不掉，
+     表现就是 Unity 卡死（模态进度条尤其明显）。
+
+  现在**整批用一次 `Client.AddAndRemove(packagesToAdd, packagesToRemove)` 提交**：
+  一个请求、一次解析，两个问题一起消失。`Install` / `InstallPlan` /
+  `InstallMany` / `Uninstall` / `UninstallMany` 全部改走这条路径。
+
+- **不再使用模态进度条**：批量改用状态栏文本汇报。并在窗口加了
+  `[InitializeOnLoadMethod]` 兜底，域重载后主动清掉可能残留的忙碌标记与进度条 ——
+  万一哪天又出现"没人清"的路径，也不会留下卡死观感。
+
+### Added
+- `ModuleDependencyResolver.Resolve(..., bool includeTargetIfPresent = true)`
+- `ModuleDependencyResolver.ResolveMany(..., bool includePresentTargets = true)`
+- `ModuleInstaller.InstallMany(..., bool includePresentTargets = false, ...)`
+
+### Tests
+- 新增 6 个用例：已装目标跳过 / 未装目标仍进计划 / **目标已装但依赖缺失时只补依赖** /
+  多目标只装缺的 / 全部已装得到空计划（界面据此提示"无需操作"）/
+  `includePresentTargets: true` 仍然等价于更新语义。
+- core **76/76**、全量 EditMode **620/620 通过**。
+
 ## [0.1.54] - 2026-09-17
 
 ### Added

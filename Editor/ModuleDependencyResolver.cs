@@ -65,8 +65,9 @@ namespace CoffeeBean.EditorTools
     /// 解析规则：
     /// · <c>dependencies</c>：CoffeeBean 模块 id，在 registry 内递归展开（传递依赖）；
     /// · <c>externalDependencies</c>：非 registry 包，靠条目里登记的原样 UPM url 安装；
-    /// · 已是工程一部分的包（<paramref name="presentPackageIds"/>）跳过 —— 除非它是本次的目标模块，
-    ///   目标永远进计划，这样「更新到指定 tag」与「首次安装」共用同一条路径；
+    /// · 已是工程一部分的包（<paramref name="presentPackageIds"/>）跳过 —— 除非它是本次的目标模块：
+    ///   目标默认永远进计划，这样「更新到指定 tag」与「首次安装」共用同一条路径；
+    ///   批量「安装所有依赖」传 <c>includeTargetIfPresent: false</c>，只装缺的、已装的不动；
     /// · 出现环、目标不在 registry ⇒ 致命错误；引用了 registry 里没有的模块 ⇒ 警告并跳过。
     /// </summary>
     public static class ModuleDependencyResolver
@@ -78,7 +79,7 @@ namespace CoffeeBean.EditorTools
         public const string CorePackageId = "com.coffeebean.core";
 
         public static ModuleInstallPlan Resolve(CoffeeBeanRegistryData registry, string targetId,
-            ICollection<string> presentPackageIds)
+            ICollection<string> presentPackageIds, bool includeTargetIfPresent = true)
         {
             var plan = new ModuleInstallPlan();
             var present = new HashSet<string>(presentPackageIds ?? new string[0], StringComparer.OrdinalIgnoreCase);
@@ -200,15 +201,20 @@ namespace CoffeeBean.EditorTools
                 });
             }
 
-            // 3) 目标模块永远进计划：首次安装与"更新到指定 tag"共用一条路径。
-            plan.Packages.Add(new PlannedPackage
+            // 3) 目标模块：默认永远进计划（首次安装与"更新到指定 tag"共用一条路径）。
+            //    includeTargetIfPresent = false 时，已装的目标跳过 —— 批量"安装所有依赖"用这个，
+            //    否则会把整个目录原样重装一遍。
+            if (includeTargetIfPresent || !present.Contains(target.id))
             {
-                Id = target.id,
-                Url = BuildUrl(target.repo, target.latest),
-                VersionTag = target.latest,
-                IsTarget = true,
-                IsExternal = false
-            });
+                plan.Packages.Add(new PlannedPackage
+                {
+                    Id = target.id,
+                    Url = BuildUrl(target.repo, target.latest),
+                    VersionTag = target.latest,
+                    IsTarget = true,
+                    IsExternal = false
+                });
+            }
 
             return plan;
         }
@@ -225,7 +231,8 @@ namespace CoffeeBean.EditorTools
         /// 在同一计划里、且更靠前地包含 d，因此 d 的首次出现一定不晚于 t。
         /// </summary>
         public static ModuleInstallPlan ResolveMany(CoffeeBeanRegistryData registry,
-            IEnumerable<string> targetIds, ICollection<string> presentPackageIds)
+            IEnumerable<string> targetIds, ICollection<string> presentPackageIds,
+            bool includePresentTargets = true)
         {
             var plan = new ModuleInstallPlan();
             if (targetIds == null) return plan;
@@ -238,7 +245,7 @@ namespace CoffeeBean.EditorTools
                 if (string.IsNullOrEmpty(id)) continue;
                 targets.Add(id);
 
-                ModuleInstallPlan one = Resolve(registry, id, presentPackageIds);
+                ModuleInstallPlan one = Resolve(registry, id, presentPackageIds, includePresentTargets);
                 if (one.HasErrors)
                 {
                     // 目标不在 registry：整体报错，避免"装了一半才发现"

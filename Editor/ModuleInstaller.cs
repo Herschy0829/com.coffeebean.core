@@ -21,26 +21,22 @@ namespace CoffeeBean.EditorTools
     public static class ModuleInstaller
     {
         /// <summary>
-        /// 安装模块。
+        /// 安装模块（单包）。优先用 <see cref="InstallWithDependencies"/>，它会先补齐依赖。
         /// </summary>
-        /// <param name="packageId">包名，如 com.coffeebean.events（仅用于日志）。</param>
-        /// <param name="gitUrl">git 仓库 URL，如 https://github.com/Herschy0829/com.coffeebean.events.git</param>
-        /// <param name="versionTag">版本 tag，如 v1.0.0（为空则使用默认分支）。</param>
-        /// <param name="onCompleted">完成回调 (成功, 消息)。</param>
         public static void Install(string packageId, string gitUrl, string versionTag, Action<bool, string> onCompleted = null)
         {
             string url = ModuleDependencyResolver.BuildUrl(gitUrl, versionTag);
-            AddRequest request = Client.Add(url);
-            PollUntilCompleted(request, ok => OnInstallCompleted(packageId, versionTag, ok, request, onCompleted));
+            RunAddAndRemove(new[] { url }, null,
+                $"已安装 {packageId}（{versionTag ?? "default branch"}）。", onCompleted);
         }
 
         /// <summary>
         /// 安装模块并**自动补装缺失依赖**（含传递依赖与第三方依赖）。
         ///
         /// CoffeeBean 模块以 git 包分发、不在任何 registry 里，所以 UPM 无法把模块 package.json 里的
-        /// <c>"com.coffeebean.tools": "0.5.0"</c> 解析成地址 —— 不补装就会解析失败。本方法先按
-        /// <see cref="ModuleDependencyResolver"/> 算出「第三方 → CoffeeBean 依赖 → 目标模块」的顺序，
-        /// 逐个串行 Client.Add（串行是为了让每次 UPM 解析都基于上一个已就位的结果），最后刷新资源库。
+        /// <c>"com.coffeebean.tools": "0.5.0"</c> 解析成地址 —— 不补装就会解析失败。
+        /// 本方法先算出「第三方 → CoffeeBean 依赖 → 目标模块」的完整清单，再用**一次**
+        /// <c>Client.AddAndRemove</c> 提交（为什么必须一次见 <see cref="RunAddAndRemove"/>）。
         ///
         /// 已在工程中的依赖会被跳过；目标模块无论是否已安装都会重装一次，
         /// 因此「首次安装」与「更新到指定 tag」共用同一条路径。
@@ -55,7 +51,7 @@ namespace CoffeeBean.EditorTools
             InstallPlan(plan, targetId, onCompleted);
         }
 
-        /// <summary>按已算好的计划执行安装（UI 可先展示计划再调用）。</summary>
+        /// <summary>按已算好的计划执行安装（UI 可先展示计划再调用）。<paramref name="targetId"/> 传 null 表示批量。</summary>
         public static void InstallPlan(ModuleInstallPlan plan, string targetId, Action<bool, string> onCompleted = null)
         {
             if (plan == null)
@@ -68,58 +64,47 @@ namespace CoffeeBean.EditorTools
                 onCompleted?.Invoke(false, plan.Error);
                 return;
             }
-            if (plan.Packages.Count == 0)
-            {
-                onCompleted?.Invoke(true, $"{targetId} 无需安装。");
-                return;
-            }
 
-            var installed = new List<string>();
-            InstallSequentially(plan, 0, installed, targetId, onCompleted, null);
+            RunAddAndRemove(UrlsOf(plan.Packages), null, DescribeInstall(plan, targetId), onCompleted);
         }
 
         /// <summary>
-        /// 安装**多个**目标模块（把各自的依赖闭包合并成一份计划后串行执行）。
-        ///
-        /// 串行是必须的：每次 <c>Client.Add</c> 都会启动一条异步的 UPM 解析链，
-        /// 同时发起多个会互相打架（请求被覆盖/丢结果），所以这里一个装完再装下一个。
+        /// 安装**多个**目标模块（各自依赖闭包合并成一份计划，**一次** UPM 请求提交）。
         /// </summary>
-        /// <param name="onProgress">进度回调 (已完成数, 总数, 当前包名)。</param>
+        /// <param name="includePresentTargets">
+        /// 已安装的目标是否也重新 Add 一次：
+        /// · <c>false</c>（一键安装所有依赖）：只装**缺的**，已装的不动 —— 否则会把整个目录原样重装一遍；
+        /// · <c>true</c>（批量更新）：已装的也重装，从而升级到 registry 里的 latest tag。
+        /// </param>
+        /// <param name="onProgress">进度回调；一次 UPM 请求没有细粒度进度，只在开始时报一次总量。</param>
         public static void InstallMany(CoffeeBeanRegistryData registry, IList<string> targetIds,
+            bool includePresentTargets = false,
             Action<bool, string> onCompleted = null, Action<int, int, string> onProgress = null)
         {
-            ModuleInstallPlan plan = ModuleDependencyResolver.ResolveMany(registry, targetIds, GetRegisteredPackageIds());
+            ModuleInstallPlan plan = ModuleDependencyResolver.ResolveMany(registry, targetIds,
+                GetRegisteredPackageIds(), includePresentTargets);
             if (plan.HasErrors)
             {
                 onCompleted?.Invoke(false, plan.Error);
                 return;
             }
-            if (plan.Packages.Count == 0)
-            {
-                onCompleted?.Invoke(true, "没有需要安装的模块。");
-                return;
-            }
 
-            var installed = new List<string>();
-            InstallSequentially(plan, 0, installed, null, onCompleted, onProgress);
+            List<string> urls = UrlsOf(plan.Packages);
+            onProgress?.Invoke(0, urls.Count, string.Empty);
+            RunAddAndRemove(urls, null, DescribeInstall(plan, null), onCompleted);
         }
 
         /// <summary>
-        /// 串行卸载多个包。**传入顺序会被忽略** —— 内部按"依赖方先卸"重排，
-        /// 因为 UPM 不允许移除一个仍被其它包依赖的包（会直接失败并把整批卡住）。
+        /// 卸载多个包。**传入顺序会被忽略** —— 内部按"依赖方先卸"重排，
+        /// 因为 UPM 不允许移除一个仍被其它包依赖的包（会直接失败）。
+        /// 整批用**一次** <c>Client.AddAndRemove</c> 提交。
         /// </summary>
-        /// <param name="onProgress">进度回调 (已完成数, 总数, 当前包名)。</param>
         public static void UninstallMany(CoffeeBeanRegistryData registry, IList<string> packageIds,
             Action<bool, string> onCompleted = null, Action<int, int, string> onProgress = null)
         {
             List<string> order = ModuleDependencyResolver.ResolveUninstallOrder(registry, packageIds);
-            if (order.Count == 0)
-            {
-                onCompleted?.Invoke(true, "没有需要卸载的模块。");
-                return;
-            }
-
-            UninstallSequentially(order, 0, new List<string>(), onCompleted, onProgress);
+            onProgress?.Invoke(0, order.Count, string.Empty);
+            RunAddAndRemove(null, order, DescribeUninstall(order), onCompleted);
         }
 
         /// <summary>
@@ -129,8 +114,7 @@ namespace CoffeeBean.EditorTools
         /// <param name="onCompleted">完成回调 (成功, 消息)。</param>
         public static void Uninstall(string packageId, Action<bool, string> onCompleted = null)
         {
-            RemoveRequest request = Client.Remove(packageId);
-            PollUntilCompleted(request, ok => OnUninstallCompleted(packageId, ok, request, onCompleted));
+            RunAddAndRemove(null, new[] { packageId }, $"已卸载 {packageId}。", onCompleted);
         }
 
         /// <summary>
@@ -211,94 +195,123 @@ namespace CoffeeBean.EditorTools
 
         // ========== 内部 ==========
 
-        private static void InstallSequentially(ModuleInstallPlan plan, int index, List<string> installed,
-            string targetId, Action<bool, string> onCompleted, Action<int, int, string> onProgress)
+        /// <summary>
+        /// 用**一次** <c>Client.AddAndRemove</c> 提交整批增删。
+        ///
+        /// **为什么必须一次，而不是逐个 Client.Add**：
+        /// Unity 文档对 <c>AddAndRemove</c> 的原话是它 "only has to solve the dependency list once,
+        /// instead of constructing a new dependency graph after each call"。逐个发在批量场景下有两个后果：
+        ///
+        /// 1. **慢到像卡死**：N 个包 = N 次完整依赖图求解 + N 次脚本导入/域重载；
+        /// 2. **更糟的是会断链**：逐个发时的完成通知挂在 <c>EditorApplication.update</c> 上，
+        ///    而域重载会丢掉旧域里注册的回调 —— 链一断，完成回调永不触发，
+        ///    界面上残留的"进行中"状态就再也清不掉了（表现就是 Unity 卡死）。
+        ///
+        /// 一次提交只有一个请求、一次解析，两个问题一起消失。
+        /// </summary>
+        private static void RunAddAndRemove(IEnumerable<string> addUrls, IEnumerable<string> removeIds,
+            string summary, Action<bool, string> onCompleted)
         {
-            if (index >= plan.Packages.Count)
+            string[] toAdd = addUrls == null
+                ? new string[0]
+                : addUrls.Where(u => !string.IsNullOrEmpty(u)).ToArray();
+            string[] toRemove = removeIds == null
+                ? new string[0]
+                : removeIds.Where(id => !string.IsNullOrEmpty(id)).ToArray();
+
+            if (toAdd.Length == 0 && toRemove.Length == 0)
             {
-                AssetDatabase.Refresh();
-                onCompleted?.Invoke(true, BuildSummary(targetId, plan, installed));
+                onCompleted?.Invoke(true, summary);
                 return;
             }
 
-            PlannedPackage pkg = plan.Packages[index];
-            onProgress?.Invoke(index, plan.Packages.Count, pkg.Id);
+            AddAndRemoveRequest request;
+            try
+            {
+                // 文档要求：调用前确保没有别的 Client 操作在飞行中（由调用方的批次互斥保证）
+                request = Client.AddAndRemove(toAdd, toRemove);
+            }
+            catch (Exception e)
+            {
+                onCompleted?.Invoke(false, $"提交 UPM 请求失败: {e.Message}");
+                return;
+            }
 
-            AddRequest request = Client.Add(pkg.Url);
             PollUntilCompleted(request, ok =>
             {
                 if (!ok)
                 {
-                    string done = installed.Count > 0 ? $"（已装好：{string.Join("、", installed)}）" : string.Empty;
+                    var attempt = new List<string>();
+                    if (toAdd.Length > 0) attempt.Add("添加 " + string.Join("、", toAdd));
+                    if (toRemove.Length > 0) attempt.Add("移除 " + string.Join("、", toRemove));
                     onCompleted?.Invoke(false,
-                        $"安装 {pkg.Id} 失败: {request.Error?.message ?? "unknown error"}{done}");
+                        $"模块变更失败: {request.Error?.message ?? "unknown error"}\n（本次尝试：{string.Join("；", attempt)}）");
                     return;
                 }
-                installed.Add(pkg.Id);
-                InstallSequentially(plan, index + 1, installed, targetId, onCompleted, onProgress);
+
+                AssetDatabase.Refresh();
+                onCompleted?.Invoke(true, summary);
             });
         }
 
-        private static void UninstallSequentially(List<string> ids, int index, List<string> removed,
-            Action<bool, string> onCompleted, Action<int, int, string> onProgress)
+        private static List<string> UrlsOf(List<PlannedPackage> packages)
         {
-            if (index >= ids.Count)
+            var urls = new List<string>(packages.Count);
+            foreach (PlannedPackage p in packages)
             {
-                AssetDatabase.Refresh();
-                onCompleted?.Invoke(true, removed.Count == 0
-                    ? "没有发生变更。"
-                    : $"已卸载 {removed.Count} 个模块：{string.Join("、", removed)}。");
-                return;
+                if (!string.IsNullOrEmpty(p.Url)) urls.Add(p.Url);
+            }
+            return urls;
+        }
+
+        private static List<string> NamesOf(List<PlannedPackage> packages)
+        {
+            var names = new List<string>(packages.Count);
+            foreach (PlannedPackage p in packages) names.Add(p.Id);
+            return names;
+        }
+
+        private static string DescribeInstall(ModuleInstallPlan plan, string targetId)
+        {
+            if (plan.Packages.Count == 0)
+            {
+                return string.IsNullOrEmpty(targetId) ? "没有需要安装的模块（都已安装）。" : $"{targetId} 无需安装。";
             }
 
-            string id = ids[index];
-            onProgress?.Invoke(index, ids.Count, id);
-
-            RemoveRequest request = Client.Remove(id);
-            PollUntilCompleted(request, ok =>
-            {
-                if (!ok)
-                {
-                    string done = removed.Count > 0 ? $"（已卸下：{string.Join("、", removed)}）" : string.Empty;
-                    onCompleted?.Invoke(false,
-                        $"卸载 {id} 失败: {request.Error?.message ?? "unknown error"}{done}");
-                    return;
-                }
-                removed.Add(id);
-                UninstallSequentially(ids, index + 1, removed, onCompleted, onProgress);
-            });
-        }
-
-        private static string BuildSummary(string targetId, ModuleInstallPlan plan, List<string> installed)
-        {
-            // 批量安装（无单一目标）走这条：只说清装了什么
+            string text;
             if (string.IsNullOrEmpty(targetId))
             {
-                string batch = installed.Count == 0
-                    ? "没有发生变更（目标均已是最新）。"
-                    : $"已安装/更新 {installed.Count} 个模块：{string.Join("、", installed)}。";
-                if (plan.Warnings.Count > 0) batch += " 注意：" + string.Join(" ", plan.Warnings);
-                return batch;
-            }
+                // 批量：说清装了哪几个
+                List<string> names = NamesOf(plan.Packages);
+                var deps = new List<string>();
+                foreach (PlannedPackage p in plan.Packages)
+                {
+                    if (!p.IsTarget) deps.Add(p.Id);
+                }
 
-            var deps = new List<string>();
-            foreach (PlannedPackage p in plan.Packages)
+                text = $"已安装 {plan.Packages.Count} 个模块：{string.Join("、", names)}。";
+                if (deps.Count > 0) text += $"（其中 {deps.Count} 个是补装的依赖）";
+            }
+            else
             {
-                if (!p.IsTarget) deps.Add(p.ToString());
+                var deps = new List<string>();
+                foreach (PlannedPackage p in plan.Packages)
+                {
+                    if (!p.IsTarget) deps.Add(p.ToString());
+                }
+                text = deps.Count == 0
+                    ? $"已安装 {targetId}（无缺失依赖）。"
+                    : $"已安装 {targetId}，并自动补装 {deps.Count} 个依赖：{string.Join("、", deps)}。";
             }
 
-            string head = deps.Count == 0
-                ? $"已安装 {targetId}（无缺失依赖）。"
-                : $"已安装 {targetId}，并自动补装 {deps.Count} 个依赖：{string.Join("、", deps)}。";
-
-            if (installed.Count == 0) head = $"{targetId} 未发生变更。";
-
-            if (plan.Warnings.Count > 0)
-            {
-                head += " 注意：" + string.Join(" ", plan.Warnings);
-            }
-            return head;
+            if (plan.Warnings.Count > 0) text += " 注意：" + string.Join(" ", plan.Warnings);
+            return text;
         }
+
+        private static string DescribeUninstall(List<string> order)
+            => order.Count == 0
+                ? "没有需要卸载的模块。"
+                : $"已卸载 {order.Count} 个模块：{string.Join("、", order)}。";
 
         private static void PollUntilCompleted(Request request, Action<bool> onDone)
         {
@@ -311,26 +324,6 @@ namespace CoffeeBean.EditorTools
                 bool ok = request.Status == StatusCode.Success;
                 onDone(ok);
             }
-        }
-
-        private static void OnInstallCompleted(string packageId, string versionTag, bool ok,
-            AddRequest request, Action<bool, string> onCompleted)
-        {
-            string message = ok
-                ? $"Installed {packageId} ({versionTag ?? "default branch"})."
-                : $"Install failed: {request.Error?.message ?? "unknown error"}";
-            if (ok) AssetDatabase.Refresh();
-            onCompleted?.Invoke(ok, message);
-        }
-
-        private static void OnUninstallCompleted(string packageId, bool ok,
-            RemoveRequest request, Action<bool, string> onCompleted)
-        {
-            string message = ok
-                ? $"Uninstalled {packageId}."
-                : $"Uninstall failed: {request.Error?.message ?? "unknown error"}";
-            if (ok) AssetDatabase.Refresh();
-            onCompleted?.Invoke(ok, message);
         }
     }
 }
