@@ -314,6 +314,242 @@ namespace CoffeeBean.Tests
             Assert.AreEqual("https://a.git", ModuleDependencyResolver.BuildUrl("https://a.git", ""));
         }
 
+        // ========== 多目标安装计划（一键安装所有依赖） ==========
+
+        [Test]
+        public void ResolveMany_MergesTargets_DependencyFirst()
+        {
+            var registry = Registry(
+                Entry("com.tools"),
+                Entry("com.asset", deps: new[] { "com.tools" }),
+                Entry("com.ui", deps: new[] { "com.tools", "com.asset" }));
+
+            ModuleInstallPlan plan = ModuleDependencyResolver.ResolveMany(
+                registry, new[] { "com.asset", "com.ui" }, new string[0]);
+
+            Assert.IsFalse(plan.HasErrors, plan.Error);
+            Assert.AreEqual(new List<string> { "com.tools", "com.asset", "com.ui" }, Ids(plan),
+                "共享依赖只装一次，且排在被依赖者之前");
+        }
+
+        [Test]
+        public void ResolveMany_MarksEveryRequestedTarget()
+        {
+            var registry = Registry(
+                Entry("com.tools"),
+                Entry("com.asset", deps: new[] { "com.tools" }),
+                Entry("com.ui", deps: new[] { "com.tools", "com.asset" }));
+
+            // asset 先被当成 ui 的依赖进了计划，但它同样是本次的目标 → IsTarget 必须为 true
+            ModuleInstallPlan plan = ModuleDependencyResolver.ResolveMany(
+                registry, new[] { "com.asset", "com.ui" }, new string[0]);
+
+            var targets = new List<string>();
+            foreach (PlannedPackage p in plan.Packages)
+            {
+                if (p.IsTarget) targets.Add(p.Id);
+            }
+            CollectionAssert.AreEquivalent(new[] { "com.asset", "com.ui" }, targets);
+        }
+
+        [Test]
+        public void ResolveMany_UnknownTarget_ReturnsErrorAndNoPackages()
+        {
+            var registry = Registry(Entry("com.a"));
+
+            ModuleInstallPlan plan = ModuleDependencyResolver.ResolveMany(
+                registry, new[] { "com.a", "com.nope" }, new string[0]);
+
+            Assert.IsTrue(plan.HasErrors, "有一个目标解析不了就整体失败，避免装了一半");
+            Assert.IsEmpty(plan.Packages);
+        }
+
+        [Test]
+        public void ResolveMany_EmptyTargets_ReturnsEmptyPlan()
+        {
+            ModuleInstallPlan plan = ModuleDependencyResolver.ResolveMany(
+                Registry(Entry("com.a")), new string[0], new string[0]);
+
+            Assert.IsFalse(plan.HasErrors);
+            Assert.IsEmpty(plan.Packages);
+        }
+
+        [Test]
+        public void ResolveMany_NullTargets_ReturnsEmptyPlan()
+        {
+            ModuleInstallPlan plan = ModuleDependencyResolver.ResolveMany(
+                Registry(Entry("com.a")), null, new string[0]);
+
+            Assert.IsFalse(plan.HasErrors);
+            Assert.IsEmpty(plan.Packages);
+        }
+
+        [Test]
+        public void ResolveMany_SkipsPresentDependencies()
+        {
+            var registry = Registry(
+                Entry("com.tools"),
+                Entry("com.ui", deps: new[] { "com.tools" }));
+
+            ModuleInstallPlan plan = ModuleDependencyResolver.ResolveMany(
+                registry, new[] { "com.ui" }, new[] { "com.tools" });
+
+            Assert.AreEqual(new List<string> { "com.ui" }, Ids(plan));
+        }
+
+        [Test]
+        public void ResolveMany_TargetAlreadyPresent_StillPlanned()
+        {
+            var registry = Registry(Entry("com.a", "v2.0.0"));
+
+            ModuleInstallPlan plan = ModuleDependencyResolver.ResolveMany(
+                registry, new[] { "com.a" }, new[] { "com.a" });
+
+            Assert.AreEqual(new List<string> { "com.a" }, Ids(plan), "目标恒进计划，便于批量更新");
+            Assert.AreEqual("https://example.com/com.a.git#v2.0.0", plan.Packages[0].Url);
+        }
+
+        [Test]
+        public void ResolveMany_OrderNeverViolatesDependencies()
+        {
+            // 强不变式：计划里任何包，其"也在计划里的依赖"必须排在它前面
+            var registry = Registry(
+                Entry("com.tools"),
+                Entry("com.asset", deps: new[] { "com.tools" }),
+                Entry("com.ui", deps: new[] { "com.tools", "com.asset" }),
+                Entry("com.purchase", deps: new[] { "com.excel" }),
+                Entry("com.excel"));
+
+            var targets = new[] { "com.ui", "com.purchase", "com.asset" };
+            ModuleInstallPlan plan = ModuleDependencyResolver.ResolveMany(registry, targets, new string[0]);
+
+            List<string> ids = Ids(plan);
+            foreach (string id in ids)
+            {
+                CoffeeBeanRegistryEntry entry = registry.modules.First(m => m.id == id);
+                foreach (string dep in entry.dependencies ?? new string[0])
+                {
+                    if (!ids.Contains(dep)) continue;
+                    Assert.Less(ids.IndexOf(dep), ids.IndexOf(id),
+                        $"{id} 的依赖 {dep} 必须排在它前面");
+                }
+            }
+        }
+
+        [Test]
+        public void ResolveMany_ExternalDependencies_Deduplicated()
+        {
+            var ext = new[] { new CoffeeBeanExternalDependency { id = "com.shared", url = "https://shared.git" } };
+            var registry = Registry(
+                Entry("com.a", ext: ext),
+                Entry("com.b", ext: new[] { new CoffeeBeanExternalDependency { id = "com.shared", url = "https://shared.git" } }));
+
+            ModuleInstallPlan plan = ModuleDependencyResolver.ResolveMany(
+                registry, new[] { "com.a", "com.b" }, new string[0]);
+
+            Assert.AreEqual(1, Ids(plan).Count(id => id == "com.shared"));
+        }
+
+        // ========== 卸载顺序（一键卸载所有依赖） ==========
+
+        [Test]
+        public void ResolveUninstallOrder_DependentsComeFirst()
+        {
+            var registry = Registry(
+                Entry("com.tools"),
+                Entry("com.asset", deps: new[] { "com.tools" }),
+                Entry("com.ui", deps: new[] { "com.tools", "com.asset" }));
+
+            List<string> order = ModuleDependencyResolver.ResolveUninstallOrder(
+                registry, new[] { "com.tools", "com.asset", "com.ui" });
+
+            Assert.AreEqual(3, order.Count);
+            Assert.Less(order.IndexOf("com.ui"), order.IndexOf("com.asset"), "ui 依赖 asset → ui 先卸");
+            Assert.Less(order.IndexOf("com.asset"), order.IndexOf("com.tools"), "asset 依赖 tools → asset 先卸");
+        }
+
+        [Test]
+        public void ResolveUninstallOrder_OnlyReturnsRequestedIds()
+        {
+            var registry = Registry(
+                Entry("com.tools"),
+                Entry("com.ui", deps: new[] { "com.tools" }));
+
+            List<string> order = ModuleDependencyResolver.ResolveUninstallOrder(registry, new[] { "com.ui" });
+
+            Assert.AreEqual(new List<string> { "com.ui" }, order);
+        }
+
+        [Test]
+        public void ResolveUninstallOrder_UnknownIdsGoFirst()
+        {
+            var registry = Registry(Entry("com.known"));
+
+            List<string> order = ModuleDependencyResolver.ResolveUninstallOrder(
+                registry, new[] { "com.known", "com.vendor.unknown" });
+
+            Assert.AreEqual(2, order.Count);
+            Assert.AreEqual("com.vendor.unknown", order[0], "registry 里查不到的排最前，免得它反过来卡住顺序");
+        }
+
+        [Test]
+        public void ResolveUninstallOrder_EmptyOrNull_ReturnsEmpty()
+        {
+            Assert.IsEmpty(ModuleDependencyResolver.ResolveUninstallOrder(Registry(), new string[0]));
+            Assert.IsEmpty(ModuleDependencyResolver.ResolveUninstallOrder(Registry(), null));
+        }
+
+        [Test]
+        public void ResolveUninstallOrder_EachIdReturnedExactlyOnce()
+        {
+            var registry = Registry(
+                Entry("com.tools"),
+                Entry("com.asset", deps: new[] { "com.tools" }),
+                Entry("com.ui", deps: new[] { "com.tools", "com.asset" }));
+
+            List<string> order = ModuleDependencyResolver.ResolveUninstallOrder(
+                registry, new[] { "com.ui", "com.asset", "com.tools", "com.ui" });
+
+            Assert.AreEqual(3, order.Count);
+            CollectionAssert.AreEquivalent(new[] { "com.ui", "com.asset", "com.tools" }, order);
+        }
+
+        [Test]
+        public void ResolveUninstallOrder_CycleDoesNotHang()
+        {
+            var registry = Registry(
+                Entry("com.a", deps: new[] { "com.b" }),
+                Entry("com.b", deps: new[] { "com.a" }));
+
+            List<string> order = ModuleDependencyResolver.ResolveUninstallOrder(
+                registry, new[] { "com.a", "com.b" });
+
+            Assert.AreEqual(2, order.Count, "成环时也不能卡死，按原顺序卸完即可");
+        }
+
+        [Test]
+        public void ResolveUninstallOrder_WholeBuiltInCatalogIsConsistent()
+        {
+            // 对内置 registry 全量校验：卸载顺序里被依赖者绝不能排在依赖方之前
+            CoffeeBeanRegistryData registry = RegistrySource.LoadBuiltIn();
+            var all = registry.modules.Select(m => m.id).ToList();
+
+            List<string> order = ModuleDependencyResolver.ResolveUninstallOrder(registry, all);
+
+            Assert.AreEqual(all.Count, order.Count);
+            var byId = registry.modules.ToDictionary(m => m.id, m => m);
+            foreach (string id in order)
+            {
+                foreach (string dep in byId[id].dependencies ?? new string[0])
+                {
+                    if (dep == ModuleDependencyResolver.CorePackageId) continue;
+                    if (!order.Contains(dep)) continue;
+                    Assert.Greater(order.IndexOf(dep), order.IndexOf(id),
+                        $"{id} 依赖 {dep}：卸载时必须先卸 {id}");
+                }
+            }
+        }
+
         // ========== 内置 registry 自洽性 ==========
 
         [Test]

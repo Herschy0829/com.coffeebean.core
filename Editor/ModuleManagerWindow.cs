@@ -189,10 +189,27 @@ namespace CoffeeBean.EditorTools
                 string.Join("\n", lines) + "\n\n是否立即全部更新？", "全部更新", "稍后");
             if (updateAll)
             {
+                // 必须走批量串行：原来是在循环里逐个 InstallFromEntry，
+                // 而每次都启动一条异步 Client.Add 链 —— N 个模块同时发起会互相打架。
+                var ids = new List<string>();
                 foreach (PackageInfo p in updatable)
                 {
-                    CoffeeBeanRegistryEntry entry = FindRegistryEntry(p.name);
-                    if (entry != null) InstallFromEntry(entry, confirmed: true);
+                    if (FindRegistryEntry(p.name) != null) ids.Add(p.name);
+                }
+
+                if (ids.Count > 0)
+                {
+                    _busy = true;
+                    _status = $"正在更新 {ids.Count} 个模块（串行）...";
+                    ModuleInstaller.InstallMany(_registry, ids,
+                        (ok, message) =>
+                        {
+                            _busy = false;
+                            _status = message;
+                            ReloadInstalled();
+                            Repaint();
+                        },
+                        BatchProgress("更新"));
                 }
             }
             Repaint();
@@ -328,7 +345,7 @@ namespace CoffeeBean.EditorTools
         private void DrawToolbar()
         {
             EditorGUILayout.BeginHorizontal(EditorStyles.toolbar);
-            GUI.enabled = !_busy;
+            GUI.enabled = !_busy && !_batchRunning;
             if (GUILayout.Button("检查更新", EditorStyles.toolbarButton)) CheckForUpdates();
             if (GUILayout.Button("刷新", EditorStyles.toolbarButton))
             {
@@ -338,6 +355,9 @@ namespace CoffeeBean.EditorTools
                 _status = "已刷新。";
             }
             if (GUILayout.Button("加载远程 registry", EditorStyles.toolbarButton)) LoadRemoteRegistry();
+            GUILayout.Space(12);
+            if (GUILayout.Button("一键安装所有依赖", EditorStyles.toolbarButton)) RunBatchInstall();
+            if (GUILayout.Button("一键卸载所有依赖", EditorStyles.toolbarButton)) RunBatchUninstall();
             GUI.enabled = true;
             GUILayout.FlexibleSpace();
             _remoteUrl = EditorGUILayout.TextField(_remoteUrl, GUILayout.MinWidth(220));
@@ -625,6 +645,189 @@ namespace CoffeeBean.EditorTools
             string text = $"\n\n需先自动补装 {deps.Count} 个依赖：\n{string.Join("\n", lines)}";
             if (plan.Warnings.Count > 0) text += "\n\n注意：\n- " + string.Join("\n- ", plan.Warnings);
             return text;
+        }
+
+        // ========== 一键批量（菜单 / 工具栏共用，不依赖窗口是否打开） ==========
+
+        private const string BatchTitle = "CoffeeBean 模块";
+
+        /// <summary>批量执行中（避免连点/重复触发两批并发跑）。</summary>
+        private static bool _batchRunning;
+
+        [MenuItem("Tools/CoffeeBean/一键安装所有依赖", false, 200)]
+        public static void InstallAllModulesFromMenu() => RunBatchInstall();
+
+        [MenuItem("Tools/CoffeeBean/一键卸载所有依赖", false, 201)]
+        public static void UninstallAllModulesFromMenu() => RunBatchUninstall();
+
+        /// <summary>取模块目录：配了远程地址就走远程，失败或未配则用内置。</summary>
+        private static void WithRegistry(Action<CoffeeBeanRegistryData> action)
+        {
+            string url = EditorPrefs.GetString(RegistrySource.RemoteUrlPrefKey, string.Empty);
+            if (string.IsNullOrEmpty(url))
+            {
+                action(RegistrySource.LoadBuiltIn());
+                return;
+            }
+
+            RegistrySource.LoadRemote(url, data =>
+                action(data != null && data.modules.Count > 0 ? data : RegistrySource.LoadBuiltIn()));
+        }
+
+        private static bool BeginBatch(string status)
+        {
+            if (_batchRunning)
+            {
+                EditorUtility.DisplayDialog(BatchTitle, "已有一批模块操作正在执行，请等它结束。", "OK");
+                return false;
+            }
+            _batchRunning = true;
+            SetWindowStatus(status);
+            return true;
+        }
+
+        private static void EndBatch(string message, bool refreshInstalled)
+        {
+            _batchRunning = false;
+            EditorUtility.ClearProgressBar();
+            SetWindowStatus(message);
+            if (refreshInstalled) RefreshOpenWindows();
+        }
+
+        private static void SetWindowStatus(string status)
+        {
+            foreach (ModuleManagerWindow window in Resources.FindObjectsOfTypeAll<ModuleManagerWindow>())
+            {
+                window._status = status;
+                window._busy = _batchRunning;
+                window.Repaint();
+            }
+        }
+
+        private static void RefreshOpenWindows()
+        {
+            foreach (ModuleManagerWindow window in Resources.FindObjectsOfTypeAll<ModuleManagerWindow>())
+            {
+                window.ReloadInstalled();
+            }
+        }
+
+        private static Action<int, int, string> BatchProgress(string verb)
+            => (done, total, id) =>
+                EditorUtility.DisplayProgressBar(BatchTitle, $"{verb} {done + 1}/{total}：{id}",
+                    total <= 0 ? 0f : (float)done / total);
+
+        /// <summary>一键安装：把 registry 里登记的全部模块装上（含各自依赖，依赖优先）。</summary>
+        public static void RunBatchInstall()
+        {
+            if (!BeginBatch("正在解析模块目录...")) return;
+
+            WithRegistry(registry =>
+            {
+                var targets = new List<string>();
+                foreach (CoffeeBeanRegistryEntry entry in registry.modules)
+                {
+                    if (entry != null && !string.IsNullOrEmpty(entry.id)) targets.Add(entry.id);
+                }
+
+                if (targets.Count == 0)
+                {
+                    EndBatch("registry 里没有模块。", false);
+                    EditorUtility.DisplayDialog(BatchTitle, "registry 里没有可安装的模块。", "OK");
+                    return;
+                }
+
+                if (!EditorUtility.DisplayDialog(BatchTitle,
+                        $"将安装 / 更新 registry 中的全部 {targets.Count} 个模块，" +
+                        "各自的依赖会自动优先补装：\n\n" +
+                        string.Join("\n", targets.ConvertAll(id => "- " + id)) +
+                        "\n\n继续？", "全部安装", "取消"))
+                {
+                    EndBatch("已取消。", false);
+                    return;
+                }
+
+                ModuleInstaller.InstallMany(registry, targets,
+                    (ok, message) =>
+                    {
+                        EndBatch(message, true);
+                        EditorUtility.DisplayDialog(ok ? "安装完成" : "安装失败", message, "OK");
+                    },
+                    BatchProgress("安装"));
+            });
+        }
+
+        /// <summary>
+        /// 一键卸载：移除工程里全部 CoffeeBean 模块（Core 除外 —— Module Manager 就住在 Core 里）。
+        /// 顺序由 <see cref="ModuleDependencyResolver.ResolveUninstallOrder"/> 决定（依赖方先卸）。
+        /// </summary>
+        public static void RunBatchUninstall()
+        {
+            if (!BeginBatch("正在读取工程模块...")) return;
+
+            WithRegistry(registry =>
+            {
+                List<string> declared = ModuleInstaller.GetManifestCoffeeBeanModules();
+                var targets = new List<string>();
+                foreach (string id in declared)
+                {
+                    // Core 不能卸：本窗口与安装器都在它里面
+                    if (string.Equals(id, ModuleDependencyResolver.CorePackageId, StringComparison.OrdinalIgnoreCase)) continue;
+                    targets.Add(id);
+                }
+
+                if (targets.Count == 0)
+                {
+                    EndBatch("工程里没有可直接卸载的 CoffeeBean 模块。", false);
+                    EditorUtility.DisplayDialog(BatchTitle, "工程里没有可直接卸载的 CoffeeBean 模块。", "OK");
+                    return;
+                }
+
+                // 卸载顺序：依赖方先卸，被依赖者后卸（UPM 不允许卸掉仍被依赖的包）
+                List<string> ordered = ModuleDependencyResolver.ResolveUninstallOrder(registry, targets);
+
+                if (!EditorUtility.DisplayDialog(BatchTitle,
+                        $"将从工程移除以下 {ordered.Count} 个模块（Core 除外），按依赖反序执行：\n\n" +
+                        string.Join("\n", ordered.ConvertAll(id => "- " + id)) +
+                        DescribeThirdPartyLeftovers(registry, ordered) +
+                        "\n\n引用这些模块的代码会立刻编译不过，确定继续？", "全部卸载", "取消"))
+                {
+                    EndBatch("已取消。", false);
+                    return;
+                }
+
+                ModuleInstaller.UninstallMany(registry, ordered,
+                    (ok, message) =>
+                    {
+                        EndBatch(message, true);
+                        EditorUtility.DisplayDialog(ok ? "卸载完成" : "卸载失败", message, "OK");
+                    },
+                    BatchProgress("卸载"));
+            });
+        }
+
+        /// <summary>列出被移除模块所需的第三方依赖（框架不会替你卸它们，避免误删还被别处用着的东西）。</summary>
+        private static string DescribeThirdPartyLeftovers(CoffeeBeanRegistryData registry, List<string> removedIds)
+        {
+            var leftovers = new List<string>();
+            var declared = new HashSet<string>(
+                ModuleInstaller.GetRegisteredPackageIds(), StringComparer.OrdinalIgnoreCase);
+
+            foreach (CoffeeBeanRegistryEntry entry in registry.modules)
+            {
+                if (entry == null || !removedIds.Contains(entry.id, StringComparer.OrdinalIgnoreCase)) continue;
+                if (entry.externalDependencies == null) continue;
+                foreach (CoffeeBeanExternalDependency external in entry.externalDependencies)
+                {
+                    if (external == null || string.IsNullOrEmpty(external.id)) continue;
+                    if (!declared.Contains(external.id)) continue;
+                    if (!leftovers.Contains(external.id)) leftovers.Add(external.id);
+                }
+            }
+
+            if (leftovers.Count == 0) return string.Empty;
+            return "\n\n这些第三方依赖不会被动到（可能还被别处用着，请自行判断是否手工移除）：\n" +
+                   string.Join("\n", leftovers.ConvertAll(id => "- " + id));
         }
 
         private void ConfirmUninstallByName(string packageId)

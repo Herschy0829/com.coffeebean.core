@@ -1,5 +1,48 @@
 # Changelog
 
+## [0.1.54] - 2026-09-17
+
+### Added
+- **一键安装所有依赖 / 一键卸载所有依赖**（菜单 `Tools > CoffeeBean`，同时是 Module Manager 工具栏按钮）：
+  - **一键安装所有依赖**：把 registry 里登记的全部模块装上，各自依赖自动优先补装（已装的顺带更新到 latest）。
+  - **一键卸载所有依赖**：移除工程里全部 `com.coffeebean.*` 模块（**Core 除外** —— Module Manager 就住在它里面），
+    按 **"依赖方先卸"** 排序执行。
+  - 两者都在执行前列出**具体清单**并二次确认；不依赖窗口是否打开（菜单直接可用）；
+    带进度条；完成后弹结果对话框。
+
+- `ModuleDependencyResolver.ResolveMany(registry, targetIds, present)`：为**多个**目标解析合并后的安装计划。
+  做法是按顺序拼接各目标的计划、再按包名去重（保留首次出现）——
+  这样拼出来的顺序仍然是"依赖在前"：若 t 依赖 d，则任何包含 t 的计划必然在同一计划里更靠前地包含 d，
+  因此 d 的首次出现一定不晚于 t。目标即使先被当作别人的依赖进过计划，`IsTarget` 也会补正为 true。
+
+- `ModuleDependencyResolver.ResolveUninstallOrder(registry, ids)`：按"依赖方先卸"给出卸载顺序。
+  **为什么必须**：UPM 不允许移除一个仍被其它包依赖的包（`Client.Remove` 直接失败），
+  顺序错了整批就卡在第一个有依赖方的包上。registry 里查不到的 id 排最前（对它们一无所知，
+  免得它们反过来依赖已知包把顺序卡住）；成环时也不会死循环。
+
+- `ModuleInstaller.InstallMany(...)` / `UninstallMany(...)`：**串行**批量执行，带 `onProgress` 回调。
+- `ModuleInstaller.GetManifestCoffeeBeanModules()`：只读 manifest 顶层 dependencies 里的
+  `com.coffeebean.*`。卸载必须用这个而不是"已解析的全部包"——
+  `Client.Remove` 只能移除 manifest 里**显式声明**的包，对间接依赖会失败。
+
+### Fixed
+- **「检查更新 → 全部更新」在多于一个模块时会互相打架**：原实现是在 `foreach` 里逐个调用
+  `InstallFromEntry`，而每一次都会启动一条**异步**的 `Client.Add` 链 —— N 个模块同时发起，
+  UPM 请求互相覆盖/丢结果，「全部更新」基本必然失败。现在改走 `InstallMany` 串行执行。
+
+### 说明（设计取舍）
+- **卸载不会动第三方依赖**（如 `com.cysharp.memorypack`）：它们可能还被别处用着，
+  框架不替你判断。但确认对话框会把"被移除模块所需、当前工程里还在"的第三方依赖列出来，
+  由你决定是否手工移除。
+- Core 自身不参与卸载：它不在 registry 里，且 Module Manager / 安装器都编译在它内部。
+
+### Tests
+- 新增 16 个用例：多目标计划合并 / 共享依赖去重 / 目标标记补正 / 未知目标整体失败 /
+  空与 null 目标、**"计划顺序永不违反依赖"的强不变式**、
+  卸载顺序（依赖方在前）/ 只返回被请求的 id / 未知 id 排最前 / 每个 id 只出现一次 /
+  成环不死循环 / **对内置 registry 全量校验卸载顺序自洽**。
+- core **70/70**、全量 EditMode **614/614 通过**。
+
 ## [0.1.53] - 2026-09-17
 
 ### Changed

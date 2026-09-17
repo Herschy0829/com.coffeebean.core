@@ -216,5 +216,142 @@ namespace CoffeeBean.EditorTools
         /// <summary>拼装 UPM git 引用：<c>repo#tag</c>（tag 为空则用默认分支）。</summary>
         public static string BuildUrl(string repo, string versionTag)
             => string.IsNullOrEmpty(versionTag) ? repo : repo + "#" + versionTag;
+
+        /// <summary>
+        /// 一次为**多个**目标解析合并后的安装计划（供"一键安装所有依赖"用）。
+        ///
+        /// 做法是把每个目标的计划按顺序拼接、再按包名去重（保留首次出现）。
+        /// 这样拼出来的顺序仍然是"依赖在前"：若 t 依赖 d，则任何包含 t 的计划都必然
+        /// 在同一计划里、且更靠前地包含 d，因此 d 的首次出现一定不晚于 t。
+        /// </summary>
+        public static ModuleInstallPlan ResolveMany(CoffeeBeanRegistryData registry,
+            IEnumerable<string> targetIds, ICollection<string> presentPackageIds)
+        {
+            var plan = new ModuleInstallPlan();
+            if (targetIds == null) return plan;
+
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var targets = new List<string>();
+
+            foreach (string id in targetIds)
+            {
+                if (string.IsNullOrEmpty(id)) continue;
+                targets.Add(id);
+
+                ModuleInstallPlan one = Resolve(registry, id, presentPackageIds);
+                if (one.HasErrors)
+                {
+                    // 目标不在 registry：整体报错，避免"装了一半才发现"
+                    plan.HasErrors = true;
+                    plan.Error = one.Error;
+                    plan.Packages.Clear();
+                    return plan;
+                }
+
+                foreach (string warning in one.Warnings)
+                {
+                    if (!plan.Warnings.Contains(warning)) plan.Warnings.Add(warning);
+                }
+
+                foreach (PlannedPackage package in one.Packages)
+                {
+                    if (seen.Add(package.Id)) plan.Packages.Add(package);
+                }
+            }
+
+            // 目标标记补正：目标可能因为先被当成别人的依赖而进了计划（IsTarget 还是 false）
+            foreach (PlannedPackage package in plan.Packages)
+            {
+                if (targets.Exists(t => string.Equals(t, package.Id, StringComparison.OrdinalIgnoreCase)))
+                {
+                    package.IsTarget = true;
+                }
+            }
+
+            return plan;
+        }
+
+        /// <summary>
+        /// 计算卸载顺序：**依赖方先卸、被依赖者后卸**。
+        ///
+        /// 为什么需要：UPM 不允许移除一个仍被其它包依赖的包（<c>Client.Remove</c> 会失败），
+        /// 所以批量卸载必须按依赖反序来，否则会卡在第一个有依赖方的包上。
+        ///
+        /// registry 里查不到的 id 会排在最前面 —— 对它们一无所知，
+        /// 让它们先走，免得它们反过来依赖某个已知包而把顺序卡住。
+        /// </summary>
+        public static List<string> ResolveUninstallOrder(CoffeeBeanRegistryData registry,
+            IEnumerable<string> packageIds)
+        {
+            var result = new List<string>();
+            if (packageIds == null) return result;
+
+            var wanted = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (string id in packageIds)
+            {
+                if (!string.IsNullOrEmpty(id)) wanted.Add(id);
+            }
+            if (wanted.Count == 0) return result;
+
+            var map = new Dictionary<string, CoffeeBeanRegistryEntry>(StringComparer.OrdinalIgnoreCase);
+            if (registry != null)
+            {
+                foreach (CoffeeBeanRegistryEntry e in registry.modules)
+                {
+                    if (e != null && !string.IsNullOrEmpty(e.id)) map[e.id] = e;
+                }
+            }
+
+            // 1) registry 里没有的先卸
+            var remaining = new List<string>();
+            foreach (string id in wanted)
+            {
+                if (map.ContainsKey(id)) remaining.Add(id);
+                else result.Add(id);
+            }
+
+            // 2) 在剩余集合上做拓扑：不断取出"在当前剩余集合里没有任何依赖方"的节点
+            //    （即没人再依赖它了），取出顺序就是可安全卸载的顺序。
+            while (remaining.Count > 0)
+            {
+                var picked = new List<string>();
+                foreach (string candidate in remaining)
+                {
+                    bool hasDependent = false;
+                    foreach (string other in remaining)
+                    {
+                        if (string.Equals(other, candidate, StringComparison.OrdinalIgnoreCase)) continue;
+                        if (DependsOn(map[other], candidate)) { hasDependent = true; break; }
+                    }
+                    if (!hasDependent) picked.Add(candidate);
+                }
+
+                if (picked.Count == 0)
+                {
+                    // 依赖成环：registry 自洽性测试会拦住它；真出现了也不能卡死，按原顺序卸完
+                    result.AddRange(remaining);
+                    break;
+                }
+
+                foreach (string id in picked)
+                {
+                    result.Add(id);
+                    remaining.Remove(id);
+                }
+            }
+
+            return result;
+        }
+
+        private static bool DependsOn(CoffeeBeanRegistryEntry entry, string dependencyId)
+        {
+            string[] deps = entry?.dependencies;
+            if (deps == null) return false;
+            foreach (string dep in deps)
+            {
+                if (string.Equals(dep, dependencyId, StringComparison.OrdinalIgnoreCase)) return true;
+            }
+            return false;
+        }
     }
 }
