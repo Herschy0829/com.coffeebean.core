@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.1.50] - 2026-09-17
+
+### Changed
+- 模块目录 `com.coffeebean.save` latest → **v0.5.0**（**纯 registry 同步，无代码变更**）：
+  save 补上了 **`BigInteger` 的 MemoryPack 格式化器**。
+  `BigInteger` 是存档核心类型（`PlayerData.mBasicItems_total` / `PeopleData.mBasicItems_total`
+  都是 `Dictionary<int, BigInteger>`），此前 save 没提供它，等于把这块留给每个消费工程自己手写。
+
+  **为什么不能直接用 MemoryPack.Core 的内建版**：MemoryPack.Core 确实带了
+  `MemoryPack.Formatters.BigIntegerFormatter`，但 NuGet 那份 DLL 把上游一条有缺陷的分支
+  （`temp.Slice(written)`，应为 `Slice(0, written)`）编了进去 ——
+  该分支只在未定义 `UNITY_2021_2_OR_NEWER` 时参与编译，Unity 工程编译自带源码时走安全分支，
+  而 netstandard2.1 的 DLL 没有 Unity 宏。实测同一个 13 字节数值：
+  本模块版 17 B 且读回正确，DLL 内建版 246 B 且**读回 = 0**（自读不自洽）。
+
+  本模块实现与工程历史手写版**逐字节一致**（4 字节小端长度 + `ToByteArray()`），
+  升级**不改变已写出的存档格式**。
+
 ## [0.1.49] - 2026-09-17
 
 ### Changed
