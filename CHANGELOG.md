@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.1.51] - 2026-09-17
+
+### Changed
+- 模块目录 `com.coffeebean.tools` latest → **v0.7.0**（**纯 registry 同步，无代码变更**）：
+  tools 新增两个**原生平台**接口。
+  - `CAppReview` —— 应用内评价：iOS 走 `UnityEngine.iOS.Device.RequestStoreReview()`；
+    Android 走 Google Play In-App Review（JNI）。结果枚举显式区分 `Unavailable`（缺依赖）
+    与 `Failed`，并带冷却（默认 90 天）与 `OpenStorePage()` 兜底。
+  - `CDeviceLocale` —— 设备地区 / 语言：`LanguageCode` / `CountryCode` / `LocaleIdentifier` /
+    `IsRightToLeft` 等；Android JNI 直读 `java.util.Locale`，iOS 及其它平台用
+    Unity 以 `NSLocale` 初始化的 `CultureInfo`，兜底再映射 `Application.systemLanguage`。
+
+  ⚠️ Android 应用内评价需要消费工程自己在 Gradle 依赖里加 `com.google.android.play:review`
+  （框架不代为分发 Google 的二进制）；缺依赖时接口返回 `Unavailable` 并给出可操作告警。
+
 ## [0.1.50] - 2026-09-17
 
 ### Changed
