@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.47] - 2026-09-17
+
+### Changed
+- 模块目录 `com.coffeebean.save` latest → **v0.3.0**：save 开始**内嵌 MemoryPack 二进制**
+  （`Runtime/Plugins/MemoryPack/`：Core 1.21.4 + Roslyn 源生成器 + netstandard2.1 依赖）。
+  消费工程从此不需要 NuGetForUnity、不需要手动放 DLL、不需要联网还原 ——
+  此前只做 git 引用会产生 87 条 `CS0234/CS0246`。
+
+  ⚠️ **升级注意**：若你此前用 NuGetForUnity 还原或手动放过 `MemoryPack.Core.dll` /
+  `MemoryPack.Generator.dll`，升级到 save v0.3.0 时**必须先把它们移除**，
+  否则 Unity 会因同名预编译程序集报错（`Multiple precompiled assemblies with the same name`）。
+
 ## [0.1.46] - 2026-09-17
 
 ### Changed
