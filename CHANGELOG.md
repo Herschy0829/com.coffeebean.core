@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.46] - 2026-09-17
+
+### Changed
+- 模块目录 `com.coffeebean.save` latest → **v0.2.0**：save 开始自带 **UniRx 的 MemoryPack 格式化器**
+  （可选程序集 `CoffeeBean.Save.UniRx`，装了 `com.neuecc.unirx` 才编译 + 自动注册）。
+  此前每个接入工程都要自己手写这份约 350 行的实现。
+
 ## [0.1.45] - 2026-09-17
 
 ### Changed
