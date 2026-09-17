@@ -4,7 +4,7 @@
     {
       "id": "com.coffeebean.core",
       "repo": "https://github.com/Herschy0829/com.coffeebean.core.git",
-      "latest": "v0.1.59",
+      "latest": "v0.1.60",
       "dependencies": []
     },
     {
@@ -121,7 +121,7 @@
     {
       "id": "com.coffeebean.tools",
       "repo": "https://github.com/Herschy0829/com.coffeebean.tools.git",
-      "latest": "v0.10.1",
+      "latest": "v0.11.0",
       "dependencies": []
     },
     {

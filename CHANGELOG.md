@@ -1,5 +1,37 @@
 # Changelog
 
+## [0.1.60] - 2026-09-17
+
+### Added
+- **Hub 工具支持"内嵌面板"**：以前模块的工具只能是"另开一个窗口"，于是"就几个开关/一行状态"
+  这种小工具也得占一个窗口（点导航 → 弹出新窗口 → 看完关掉）。现在多了一类：
+
+  | 工具形态 | 模块侧写法 | Hub 行为 |
+  |---|---|---|
+  | 独立窗口工具（原有） | 非抽象 `EditorWindow` 派生类 + `[CoffeeBeanTool]` | 点导航开一个窗口 |
+  | **内嵌面板（新增）** | `static class` + `[CoffeeBeanTool]` + `public static void DrawTool(Action requestRepaint)` | **直接画在 Hub 内容区** |
+
+  判定纯靠**结构**，没有给 attribute 加字段：`[CoffeeBeanTool]` 在各模块里是各自维护的副本，
+  加字段就得让每个模块跟着改一遍，而按"static 类 + DrawTool 签名"找则旧的副本一行都不用动
+  （老模块的窗口工具照常工作，两者判据互斥）。
+
+  `DrawTool` 的 `Action requestRepaint` 是宿主窗口传进去的 —— 面板是静态类、拿不到窗口，
+  异步操作（如 UPM 装包）结束后靠它刷新自己。也接受无参的 `DrawTool()`。
+  面板抛异常只会在这个区块里显示错误 + 打 Console，不会把整个 Hub 打挂。
+
+- `CoffeeBeanToolRegistry.ToolEntry` 新增 `InlineDraw` / `IsInline` / `DrawInline(Action)`；
+  `CoffeeBeanToolRegistry.FindInlineDraw(Type)` 公开（带测试）。
+
+### Changed
+- **内置 registry 指向 tools v0.11.0**（第三方依赖面板进 Hub）。
+
+### Tests
+- `CoffeeBeanToolRegistryTests` 4 → 9 条：两类工具的判据必须**互斥且恰好一类**
+  （`IsInline ^ WindowType != null`）、内嵌面板必须是 static 类且签名正确、
+  内嵌面板的 `Open()` 是安全空操作、`FindInlineDraw` 对签名不符/null 返回 null，
+  以及**「第三方依赖」面板必须被 Hub 发现为内嵌**（改错方法名/漏加 attribute 会红）。
+- Core 测试 83 → 88，全量 EditMode **690/690 全绿**。
+
 ## [0.1.59] - 2026-09-17
 
 ### Changed

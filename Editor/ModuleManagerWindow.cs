@@ -43,6 +43,7 @@ namespace CoffeeBean.EditorTools
         // ========== 工具导航 ==========
         private List<CoffeeBeanToolRegistry.ToolEntry> _tools = new List<CoffeeBeanToolRegistry.ToolEntry>();
         private Vector2 _toolsScroll;
+        private Vector2 _inlineScroll; // 内嵌工具面板（由模块提供 DrawTool）自己的滚动位置
         private string _selectedTool; // 当前选中工具标题（"模块管理"为内置项）
 
         private const string BuiltinModuleManager = "模块管理";
@@ -611,7 +612,7 @@ namespace CoffeeBean.EditorTools
             return GUILayout.Button(content, style, GUILayout.Height(30));
         }
 
-        /// <summary>右侧：内容区（模块管理 或 工具卡片）。</summary>
+        /// <summary>右侧：内容区（模块管理 / 内嵌面板 / 工具卡片）。</summary>
         private void DrawContentPanel()
         {
             EditorGUILayout.BeginVertical(GUILayout.ExpandHeight(true));
@@ -621,8 +622,40 @@ namespace CoffeeBean.EditorTools
             }
             else
             {
-                DrawToolCard();
+                CoffeeBeanToolRegistry.ToolEntry tool = _tools.FirstOrDefault(t => t.Title == _selectedTool);
+                if (tool != null && tool.IsInline) DrawInlineTool(tool);
+                else DrawToolCard();
             }
+            EditorGUILayout.EndVertical();
+        }
+
+        /// <summary>
+        /// 内嵌工具面板：直接画在内容区里（不另开窗口），内容由模块自己的
+        /// <c>DrawTool</c> 提供。Hub 只是宿主，所以面板出错也只在这里兜住，不牵连整个窗口。
+        /// </summary>
+        private void DrawInlineTool(CoffeeBeanToolRegistry.ToolEntry tool)
+        {
+            EditorGUILayout.BeginVertical(GUI.skin.box, GUILayout.ExpandHeight(true));
+            EditorGUILayout.Space(4);
+            EditorGUILayout.LabelField("🧩 " + tool.Title, new GUIStyle(EditorStyles.boldLabel) { fontSize = 15 });
+            if (!string.IsNullOrEmpty(tool.Description))
+            {
+                EditorGUILayout.LabelField(tool.Description, EditorStyles.wordWrappedLabel);
+            }
+            EditorGUILayout.Space(6);
+
+            _inlineScroll = EditorGUILayout.BeginScrollView(_inlineScroll, GUILayout.ExpandHeight(true));
+            try
+            {
+                tool.DrawInline(Repaint);
+            }
+            catch (Exception e)
+            {
+                EditorGUILayout.HelpBox(
+                    $"面板绘制失败：{e.Message}\n（{tool.Title} · {tool.Module}）\n详见 Console。", MessageType.Error);
+                Debug.LogError($"[CoffeeBean] 内嵌工具面板「{tool.Title}」绘制异常：{e}");
+            }
+            EditorGUILayout.EndScrollView();
             EditorGUILayout.EndVertical();
         }
 
