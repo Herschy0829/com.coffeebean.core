@@ -5,12 +5,36 @@ using UnityEngine.Networking;
 
 namespace CoffeeBean.EditorTools
 {
+    /// <summary>
+    /// registry 之外的第三方依赖（如 com.cysharp.memorypack）。
+    /// 这类包不在任何 registry 里，UPM 无法按版本号解析，必须给完整 UPM 引用才能自动安装。
+    /// </summary>
+    [Serializable]
+    public sealed class CoffeeBeanExternalDependency
+    {
+        /// <summary>包名，如 com.cysharp.memorypack。</summary>
+        public string id;
+
+        /// <summary>完整 UPM 引用：git URL（可带 ?path= 与 #tag）、file: 路径或 包名@版本。</summary>
+        public string url;
+    }
+
     [Serializable]
     public sealed class CoffeeBeanRegistryEntry
     {
         public string id;
         public string repo;
         public string latest;
+
+        /// <summary>
+        /// 依赖的 CoffeeBean 模块 id（必须在同一 registry 内，可传递展开）。
+        /// 与模块自身 package.json 的 dependencies 保持一致 —— 后者是 UPM 用来解析的，
+        /// 前者是框架用来在安装时「自动补装」的。
+        /// </summary>
+        public string[] dependencies;
+
+        /// <summary>依赖的第三方包（不在 registry 内，需显式 UPM 地址）。</summary>
+        public CoffeeBeanExternalDependency[] externalDependencies;
     }
 
     [Serializable]

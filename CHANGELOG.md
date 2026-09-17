@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.1.48] - 2026-09-17
+
+### Added
+- **安装模块时自动补装缺失依赖**。此前 `Window > CoffeeBean` 的「安装」只做一件事：`Client.Add(模块自己的 git url)`。
+  于是装 `save` 必然失败——它的 `package.json` 声明了 `com.coffeebean.tools: 0.5.0` 与
+  `com.cysharp.memorypack: 1.21.4`，而模块是 git 包、不在任何 registry 里，
+  UPM 无法把版本号解析成地址，解析直接报错。
+  现在新增 `ModuleDependencyResolver`（纯逻辑、可单测）与
+  `ModuleInstaller.InstallWithDependencies / InstallPlan`：
+  - 按 `dependencies` 递归展开 CoffeeBean 模块依赖（传递闭包、菱形去重、环检测）；
+  - 按 `externalDependencies` 安装 registry 之外的第三方包（用条目里登记的原样 UPM url）；
+  - 已在工程中的依赖跳过；**目标模块无论是否已装都进计划**，所以「首次安装」与「更新到指定 tag」共用一条路径；
+  - 串行 `Client.Add`（每次解析基于上一个已就位的结果），完成后回一次 `AssetDatabase.Refresh()`；
+  - 安装前的确认框会列出「本次将自动补装哪些依赖」，registry 里查不到的依赖只告警不中断。
+  - `com.coffeebean.core` 恒视为已存在（它不登记在 registry 里，否则用户能把它当普通模块装卸）。
+
+### Changed
+- **registry schema 升到 version 2**：每个模块条目新增 `dependencies`（CoffeeBean 模块 id）
+  与 `externalDependencies`（`{id, url}`）。JsonUtility 会忽略缺失字段，因此旧版 registry JSON 仍可用。
+  已按各模块 `package.json` 的真实依赖补齐全部 16 条：`ad → tools+telemetry`、`asset/build/debug/input/net/telemetry → tools`、
+  `events → core`、`purchase → excel`、`save → tools`（第三方 `com.cysharp.memorypack`）、`ui → tools+asset`。
+  注意：`com.unity.addressables` / `com.unity.purchasing` 这类官方 registry 能自行解析的依赖**不登记**，
+  它们由 UPM 处理，登记反而会绕过版本约束。
+
+### Tests
+- 新增 `ModuleDependencyResolverTests`（22 个用例）：传递顺序、菱形去重、已存在跳过、目标恒在计划内、
+  第三方依赖排在最前且用显式 url、缺 url/缺 repo/未登记依赖只告警、环与自环报错、大小写不敏感匹配、
+  `BuildUrl` 拼接；另含 **registry 自洽性**校验（无重复 id、依赖均可解析、任意模块都能解析出无环计划、
+  save 必须声明 memorypack）。
+
 ## [0.1.47] - 2026-09-17
 
 ### Changed

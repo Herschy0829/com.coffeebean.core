@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -562,8 +562,10 @@ namespace CoffeeBean.EditorTools
         private void UpdateFromEntry(CoffeeBeanRegistryEntry entry)
         {
             _installedTags.TryGetValue(entry.id, out string current);
+            ModuleInstallPlan plan = ResolveInstallPlan(entry);
+            string depText = plan.HasErrors ? $"\n\n⚠ {plan.Error}" : DescribeDependencies(plan);
             if (!EditorUtility.DisplayDialog("更新模块",
-                    $"更新 {entry.id}\n  当前: {(string.IsNullOrEmpty(current) ? "?" : current)}\n  最新: {entry.latest}\n\n确定更新？",
+                    $"更新 {entry.id}\n  当前: {(string.IsNullOrEmpty(current) ? "?" : current)}\n  最新: {entry.latest}{depText}\n\n确定更新？",
                     "更新", "取消")) return;
             InstallFromEntry(entry, confirmed: true);
         }
@@ -577,15 +579,52 @@ namespace CoffeeBean.EditorTools
             }
 
             bool isUpdate = _installed.Any(p => p.name == entry.id);
+            ModuleInstallPlan plan = ResolveInstallPlan(entry);
+            if (plan.HasErrors)
+            {
+                _status = plan.Error;
+                EditorUtility.DisplayDialog("无法安装", plan.Error, "OK");
+                Repaint();
+                return;
+            }
+
+            // 需要顺带补装依赖时先让用户知情（CoffeeBean 模块是 git 包，UPM 自己解析不了它们的版本号）
+            if (!confirmed && plan.RequiredDependencies.Count > 0)
+            {
+                if (!EditorUtility.DisplayDialog("安装模块",
+                        $"安装 {entry.id}@{entry.latest}{DescribeDependencies(plan)}\n\n继续？",
+                        "安装", "取消")) return;
+            }
+
             _busy = true;
             _status = isUpdate ? $"正在更新 {entry.id} → {entry.latest}..." : $"正在安装 {entry.id}...";
-            ModuleInstaller.Install(entry.id, entry.repo, entry.latest, (ok, message) =>
+            ModuleInstaller.InstallPlan(plan, entry.id, (ok, message) =>
             {
                 _busy = false;
                 _status = message;
                 ReloadInstalled();
                 Repaint();
             });
+        }
+
+        /// <summary>算出安装计划（含需要自动补装的依赖）。</summary>
+        private ModuleInstallPlan ResolveInstallPlan(CoffeeBeanRegistryEntry entry)
+            => ModuleDependencyResolver.Resolve(_registry, entry.id, ModuleInstaller.GetRegisteredPackageIds());
+
+        /// <summary>把计划里要补装的依赖整理成可读文本（无依赖时为空串）。</summary>
+        private static string DescribeDependencies(ModuleInstallPlan plan)
+        {
+            List<PlannedPackage> deps = plan.RequiredDependencies;
+            if (deps.Count == 0)
+            {
+                return plan.Warnings.Count == 0 ? string.Empty : "\n\n注意：\n- " + string.Join("\n- ", plan.Warnings);
+            }
+
+            var lines = new List<string>();
+            foreach (PlannedPackage p in deps) lines.Add("  · " + p);
+            string text = $"\n\n需先自动补装 {deps.Count} 个依赖：\n{string.Join("\n", lines)}";
+            if (plan.Warnings.Count > 0) text += "\n\n注意：\n- " + string.Join("\n- ", plan.Warnings);
+            return text;
         }
 
         private void ConfirmUninstallByName(string packageId)
