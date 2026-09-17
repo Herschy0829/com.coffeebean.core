@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.1.52] - 2026-09-17
+
+### Changed
+- 模块目录同步（**纯 registry 同步，无代码变更**）：
+  - `com.coffeebean.tools` latest → **v0.8.0**
+  - `com.coffeebean.build` latest → **v0.3.0**
+
+  两个版本合起来解决一件事：**应用内评价所需的 Android Gradle 依赖不再要手工改 gradle**。
+  应用内评价需要 `com.google.android.play:review`，而 Unity 包没法直接改消费工程的
+  `build.gradle` —— 以前只能靠文档提醒开发者手改，漏了就表现成「接口在真机上静默失效」。
+
+  现在拆成「谁需要」与「谁来写」：
+  - tools 登记需求（`CAndroidGradleRequirements`），判定依据有三条：
+    运行期调用痕迹（持久化，跨域重载有效）、工程源码扫描（给 CI / 新克隆机器兜底）、显式登记；
+  - **装了 build** → 由 build 的 `CAndroidRequiredDeps` 写（首选，有导出日志）；
+  - **没装 build** → 由 tools 的 `CAndroidGradleDependencyFallback` 写。
+    它探测 `CoffeeBean.CAndroidRequiredDeps` 类型决定是否兜底，因此旧版 build 在场时也能兜底。
+
+  ⚠️ build v0.3.0 同时修正了一个**门控缺口**：原回调在没有
+  `Assets/CoffeeBean/ExportConfig.asset` 时直接 warning + return。若把必需依赖塞进那条
+  配置门控的管线，没配过导出定制的工程就会静默漏依赖。现在必需依赖走独立入口，
+  每次 Android 导出/构建都执行。
+
+  依赖版本取自 Google Maven 元数据：`com.google.android.play:review:2.0.2`。
+
 ## [0.1.51] - 2026-09-17
 
 ### Changed

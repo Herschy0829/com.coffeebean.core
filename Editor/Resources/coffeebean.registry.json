@@ -21,7 +21,7 @@
     {
       "id": "com.coffeebean.build",
       "repo": "https://github.com/Herschy0829/com.coffeebean.build.git",
-      "latest": "v0.2.0",
+      "latest": "v0.3.0",
       "dependencies": [
         "com.coffeebean.tools"
       ]
@@ -115,7 +115,7 @@
     {
       "id": "com.coffeebean.tools",
       "repo": "https://github.com/Herschy0829/com.coffeebean.tools.git",
-      "latest": "v0.7.0",
+      "latest": "v0.8.0",
       "dependencies": []
     },
     {
