@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.1.56] - 2026-09-17
+
+### Fixed
+- **Module Manager 品牌栏显示的框架版本与实际版本不一致（漂移 12 个版本）**。
+  窗口里写死了 `private const string FrameworkVersion = "0.1.43";`，
+  而 core 从那之后一路发到 0.1.55 —— 界面上却一直显示 `框架工具中心 v0.1.43`，
+  只能靠"发版时记得改这里"兜着，显然没兜住。
+
+  现在**不再硬编码**，改为从权威来源取（并缓存，`OnGUI` 每帧都会读）：
+  1. `PackageInfo.FindForAssembly(...)` 拿到的**包版本**（package.json，即用户实际装的版本）；
+  2. 回退：模块标记 `[CoffeeBeanModule]` 里的版本（Core 自己用于 `MinCoreVersion` 比较的那个）——
+     覆盖 core 被 embed 到 `Assets/` 这类 UPM 查不到的情况。
+
+  顺带加了**漂移可视化**：包版本与模块标记版本不一致时，品牌栏直接亮出
+  「版本漂移：模块标记 vX.Y.Z」警告徽章 —— 把问题暴露出来，而不是继续显示一个谁都信不过的数字。
+
+### Tests
+- 新增 `FrameworkVersion_MatchesPackageJsonAndModuleMarker`：用**三个独立来源**交叉验证
+  （package.json 文件内容、`[CoffeeBeanModule]` 标记、窗口实际显示值），
+  任何一处漏改都会红。另加 `FrameworkVersion_IsNotEmpty` 防退化。
+  这条测试就是为了让上面那类漂移不可能再发生。
+- core **78/78**、全量 EditMode **622/622 通过**。
+
+### Audit（全框架版本一致性盘点）
+顺手把所有模块的版本声明都查了一遍，结论：**只有上面这一处不一致**。
+- 16 个模块的 `package.json` 版本与 `[CoffeeBeanModule]` 标记版本**两两一致**；
+- 除该常量外，框架里没有第二处硬编码版本号。
+- registry 里 `latest` 与各仓库远端 tag 也一致（之前已用 `git ls-remote` 核对过）。
+
 ## [0.1.55] - 2026-09-17
 
 ### Fixed

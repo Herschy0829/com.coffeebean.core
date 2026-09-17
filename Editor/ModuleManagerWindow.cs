@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEditor.PackageManager;
@@ -244,8 +245,78 @@ namespace CoffeeBean.EditorTools
         private const string NavGroupManage = "管理";
         private const string NavGroupTools = "工具";
 
-        /// <summary>框架当前版本（显示用；发布时随 ModuleMarker 同步）。</summary>
-        private const string FrameworkVersion = "0.1.43";
+        /// <summary>
+        /// 框架当前版本（品牌栏显示用）。**不再硬编码**。
+        ///
+        /// 这里原来写死成 <c>"0.1.43"</c>，之后 core 一路发到 0.1.55，
+        /// 而窗口上一直显示 0.1.43 —— 漂移了 12 个版本，纯属"发布时记得同步"没兜住。
+        /// 现在从权威来源取（并缓存，OnGUI 每帧都会读）：
+        /// 1) UPM 解析到的**包版本**（package.json，即用户实际装的版本）；
+        /// 2) 回退：模块标记 <see cref="CoffeeBeanModuleAttribute"/> 里的版本
+        ///    （Core 自己用于 MinCoreVersion 比较的那个）。
+        ///
+        /// 两者若不一致（手工改版本时漏改一处），品牌栏会直接给出警告徽章 ——
+        /// 把漂移暴露出来，而不是继续显示一个谁都信不过的数字。
+        /// </summary>
+        internal static string FrameworkVersion
+            => _frameworkVersion ?? (_frameworkVersion = ResolveFrameworkVersion());
+
+        private static string _frameworkVersion;
+
+        /// <summary>模块标记里声明的 Core 版本（用于和包版本比对，暴露漂移）。</summary>
+        internal static string FrameworkMarkerVersion
+            => _frameworkMarkerVersion ?? (_frameworkMarkerVersion = ResolveMarkerVersion());
+
+        private static string _frameworkMarkerVersion;
+
+        private static string ResolveFrameworkVersion()
+        {
+            // 1) UPM 包版本（权威：就是用户实际安装的那个版本）
+            try
+            {
+                PackageInfo info = PackageInfo.FindForAssembly(typeof(CoffeeBeanVersion).Assembly);
+                if (info != null && !string.IsNullOrEmpty(info.version)) return info.version;
+            }
+            catch (Exception)
+            {
+                // 编辑器尚未完成包解析等情况 → 走回退
+            }
+
+            // 2) 模块标记
+            string marker = FrameworkMarkerVersion;
+            return string.IsNullOrEmpty(marker) ? "?" : marker;
+        }
+
+        private static string ResolveMarkerVersion()
+        {
+            try
+            {
+                var attr = typeof(CoffeeBeanVersion).Assembly
+                    .GetCustomAttribute<CoffeeBeanModuleAttribute>();
+                if (attr != null && !string.IsNullOrEmpty(attr.Version)) return attr.Version;
+            }
+            catch (Exception)
+            {
+            }
+            return string.Empty;
+        }
+
+        /// <summary>包版本与模块标记版本是否漂移（手工改版本时容易漏改一处）。</summary>
+        internal static bool HasVersionDrift
+        {
+            get
+            {
+                string marker = FrameworkMarkerVersion;
+                return !string.IsNullOrEmpty(marker) && marker != FrameworkVersion;
+            }
+        }
+
+        /// <summary>测试/刷新用：清掉版本缓存。</summary>
+        internal static void ResetVersionCache()
+        {
+            _frameworkVersion = null;
+            _frameworkMarkerVersion = null;
+        }
 
         private void OnGUI()
         {
@@ -314,6 +385,12 @@ namespace CoffeeBean.EditorTools
             GUILayout.Label("☕ CoffeeBean", titleStyle);
             GUILayout.Space(6);
             GUILayout.Label($"框架工具中心 v{FrameworkVersion}", EditorStyles.miniLabel);
+            // 包版本与模块标记版本漂移时直接暴露出来（手工改版本容易漏改一处）
+            if (HasVersionDrift)
+            {
+                GUILayout.Space(6);
+                DrawBadgeWarn($"版本漂移：模块标记 v{FrameworkMarkerVersion}");
+            }
             GUILayout.FlexibleSpace();
 
             // 概览徽章
