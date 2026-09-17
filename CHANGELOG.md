@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.45] - 2026-09-17
+
+### Changed
+- 模块目录 `com.coffeebean.save` latest → **v0.1.2**。该版本修的是**文档缺陷**（无代码变更）：
+  README 里的 MemoryPack git 路径写错（`?path=src/MemoryPack` 并非 Unity 包），
+  且未说明「git 引用之外还必须自备 NuGet 的 `MemoryPack.Core.dll` + Roslyn 源生成器」——
+  这是把模块接入真实工程（IdleMedievalLife）时暴露的：只做 git 引用会产生 87 条 `CS0234/CS0246`。
+
 ## [0.1.44] - 2026-09-14
 
 ### Changed
