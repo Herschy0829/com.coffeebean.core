@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.1.57] - 2026-09-17
+
+### Changed
+- **内置 registry 指向 tools v0.10.0**（新增第三方依赖一键集成：UniRx / UniTask）。
+  只有这一处变化 —— 目录里的版本号是"框架告诉用户去哪儿拿最新模块"的唯一来源，
+  不跟着发版走的话，装了这个 core 的工程在 `Window > CoffeeBean` 里看不到 tools 的更新。
+
+  拿到新目录有两条路，都不需要先升级 core：
+  1. 窗口里点 **加载远程 registry**（`EditorPrefs: CoffeeBean.RegistryUrl`，可指向 raw.githubusercontent）；
+  2. 直接一键更新 core 自己。
+
+### Notes
+- 本次没有任何运行时代码改动，纯粹是随 tools v0.10.0 发布同步目录。
+
 ## [0.1.56] - 2026-09-17
 
 ### Fixed
