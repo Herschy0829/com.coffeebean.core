@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.1.63] - 2026-09-18
+
+### Changed
+- **内置 registry 指向 asset v0.6.0**：该版本给「Addressables 设置」面板补上了
+  **打包验证**手段（播放模式 FastMode ⇄ Use Existing Build 一键切换、不构建的打包预检、
+  一键 Build Content + 结果报告）。指针：core → v0.1.63、asset → v0.6.0。
+
+### Tests
+- 全量 EditMode **718**（717 通过 + 1 有意跳过），其中 asset 侧新增 8 条打包预检测试。
+
 ## [0.1.62] - 2026-09-18
 
 ### Changed
