@@ -4,7 +4,7 @@
     {
       "id": "com.coffeebean.core",
       "repo": "https://github.com/Herschy0829/com.coffeebean.core.git",
-      "latest": "v0.1.67",
+      "latest": "v0.1.68",
       "dependencies": []
     },
     {
@@ -63,7 +63,7 @@
     {
       "id": "com.coffeebean.excel",
       "repo": "https://github.com/Herschy0829/com.coffeebean.excel.git",
-      "latest": "v0.4.0",
+      "latest": "v0.5.0",
       "dependencies": []
     },
     {

@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.68] - 2026-09-18
+
+### Changed
+- **内置 registry 指向 excel v0.5.0**：excel 这次是**破坏性变更**，装 excel 的用户请先看它的 CHANGELOG 顶部 ——
+  `_b` 从 bool 改成 BigInteger（布尔改用 `_bool`），生成的 Getter 改用 Newtonsoft.Json 反序列化
+  （JsonUtility 读不回 BigInteger/decimal/时间/Guid/字典/Rect），列类型从 6 种扩到 27 种并支持枚举生成，
+  另外新增"生成前按声明类型逐格真校验"（填错报第几行第几列，不再安静地写成 0）。
+  指针：core → v0.1.68、excel → v0.5.0。
+
+### Tests
+- 全量 EditMode **806**（805 通过 + 1 有意跳过）。
+
 ## [0.1.67] - 2026-09-18
 
 ### Changed
