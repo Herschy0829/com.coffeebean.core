@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.1.66] - 2026-09-18
+
+### Changed
+- **内置 registry 指向 asset v0.7.0**：给资源加载加了"编辑器路径兜底"——
+  迭代期新增资源不用再手工加进 Addressables group，编辑器里按资源路径直读；
+  每次兜底都会记进清单（持久化，活过进出 Play 模式的域重载），
+  在 Hub 的「Addressables 设置」面板里可以查看/复制/清空，**出包前照着核对**。
+  同时给 `CAssetSetup.EnsureSettings()` 加了三条防线（磁盘上有文件就绝不创建、导入中跳过、
+  只在确实不存在时创建），关掉"可能覆写工程已有 Addressables 设置"的风险。
+
+  指针：core → v0.1.66、asset → v0.7.0。
+
+### Tests
+- 全量 EditMode **734**（733 通过 + 1 有意跳过）。
+
 ## [0.1.65] - 2026-09-18
 
 ### Fixed
