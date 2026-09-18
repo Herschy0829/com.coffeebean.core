@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.1.67] - 2026-09-18
+
+### Changed
+- **内置 registry 指向 excel v0.4.0**：excel 新增「类型映射说明」窗口
+  （`Window > CoffeeBean` → `Excel · 类型映射说明`，与「Excel 配置表工具」同级），
+  并把列类型后缀表收敛成代码里的单一数据源 `CExcelTypeCatalog`（解析与窗口共用，不可能漂移）。
+  指针：core → v0.1.67、excel → v0.4.0。
+
+### Tests
+- 全量 EditMode **747**（746 通过 + 1 有意跳过）。
+
 ## [0.1.66] - 2026-09-18
 
 ### Changed
