@@ -567,6 +567,12 @@ namespace CoffeeBean.EditorTools
             }
             else
             {
+                if (_tools.Any(t => !t.IsInline))
+                {
+                    // 窗口类工具原来要"点导航选中 -> 再点卡片上的打开"两步，第一步看起来像没反应
+                    EditorGUILayout.LabelField("单击选中 · 双击直接打开", EditorStyles.centeredGreyMiniLabel);
+                }
+
                 string lastModule = null;
                 foreach (CoffeeBeanToolRegistry.ToolEntry tool in _tools)
                 {
@@ -581,6 +587,8 @@ namespace CoffeeBean.EditorTools
                     if (DrawNavButton($"{moduleLabel} · {tool.Title}", tool.Description, selected))
                     {
                         _selectedTool = tool.Title;
+                        // 双击窗口类工具 = 直接打开（内嵌面板本身已经在右边画出来了，不需要）
+                        if (!tool.IsInline && IsSecondClickOn(tool.Title)) tool.Open();
                     }
                 }
             }
@@ -594,6 +602,29 @@ namespace CoffeeBean.EditorTools
         {
             var style = new GUIStyle(EditorStyles.miniBoldLabel) { normal = { textColor = new Color(0.5f, 0.6f, 0.8f) } };
             EditorGUILayout.LabelField(groupName, style);
+        }
+
+        // 双击检测：不读 Event.clickCount —— GUILayout.Button 在 MouseUp 触发，
+        // 那一刻的 clickCount 不可靠。自己记"同一个工具在 0.4 秒内被点了两次"。
+        private string _lastNavClickTitle;
+        private double _lastNavClickTime;
+
+        /// <summary>本次点击是否构成"双击同一个工具"。</summary>
+        private bool IsSecondClickOn(string title)
+        {
+            double now = EditorApplication.timeSinceStartup;
+            bool isSecond = _lastNavClickTitle == title && (now - _lastNavClickTime) <= 0.4;
+            if (isSecond)
+            {
+                _lastNavClickTitle = null;
+                _lastNavClickTime = 0;
+            }
+            else
+            {
+                _lastNavClickTitle = title;
+                _lastNavClickTime = now;
+            }
+            return isSecond;
         }
 
         /// <summary>导航项（选中态高亮）。</summary>
@@ -696,7 +727,7 @@ namespace CoffeeBean.EditorTools
             {
                 tool.Open();
             }
-            EditorGUILayout.HelpBox("工具在独立窗口打开，本窗口保持为统一入口。", MessageType.None);
+            EditorGUILayout.HelpBox("工具在独立窗口打开（左侧双击工具名也可直接打开），本窗口保持为统一入口。", MessageType.None);
 
             EditorGUILayout.EndVertical();
         }
