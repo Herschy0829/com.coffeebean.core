@@ -163,5 +163,42 @@ namespace CoffeeBean.Tests
                 else EditorPrefs.DeleteKey(RegistrySource.RemoteUrlPrefKey);
             }
         }
+
+        // ========== 缓存穿透 ==========
+
+        /// <summary>
+        /// 远程目录请求必须带缓存穿透参数。
+        ///
+        /// 实测踩过：`raw.githubusercontent.com` 的 `Cache-Control: max-age=300`，
+        /// 刚发完新版本，编辑器读到的仍是**旧目录** → 计划里的版本与现状相同 → UPM 请求成了空操作，
+        /// 界面却显示"已安装"。加了穿透参数（目录才几 KB）这个问题就没了。
+        /// </summary>
+        [Test]
+        public void WithCacheBuster_AppendsTimestampQuery()
+        {
+            string result = RegistrySource.WithCacheBuster("https://raw.githubusercontent.com/a/b/registry.json");
+
+            StringAssert.StartsWith("https://raw.githubusercontent.com/a/b/registry.json", result);
+            Assert.AreNotEqual("https://raw.githubusercontent.com/a/b/registry.json", result, "必须带上穿透参数");
+            StringAssert.Contains("?t=", result);
+        }
+
+        [Test]
+        public void WithCacheBuster_UsesAmpersandWhenQueryAlreadyExists()
+        {
+            string result = RegistrySource.WithCacheBuster("https://example.com/registry.json?branch=main");
+
+            StringAssert.Contains("?branch=main&t=", result);
+        }
+
+        [Test]
+        public void WithCacheBuster_LeavesNonHttpAlone()
+        {
+            Assert.AreEqual("file:///x/registry.json", RegistrySource.WithCacheBuster("file:///x/registry.json"));
+            Assert.AreEqual("Packages/com.coffeebean.core/Editor/Resources/coffeebean.registry.json",
+                RegistrySource.WithCacheBuster("Packages/com.coffeebean.core/Editor/Resources/coffeebean.registry.json"));
+            Assert.IsNull(RegistrySource.WithCacheBuster(null));
+            Assert.AreEqual(string.Empty, RegistrySource.WithCacheBuster(string.Empty));
+        }
     }
 }

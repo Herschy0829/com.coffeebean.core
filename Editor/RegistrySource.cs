@@ -101,6 +101,25 @@ namespace CoffeeBean.EditorTools
             }
         }
 
+        /// <summary>
+        /// 给 URL 加一个缓存穿透参数。
+        ///
+        /// **为什么必须有**：`raw.githubusercontent.com` 的响应头是 `Cache-Control: max-age=300`，
+        /// 也就是说**发布后最多 5 分钟内，编辑器读到的可能还是旧目录**。实测踩到过：
+        /// 刚发了 core v0.1.64 / asset v0.6.1，编辑器拿到的仍是上一版目录 ——
+        /// 于是"要装的版本"与现状完全相同，UPM 请求成了**空操作**，而界面还显示"已安装"。
+        /// 目录只有几 KB，穿透的代价可以忽略。
+        /// </summary>
+        internal static string WithCacheBuster(string url)
+        {
+            if (string.IsNullOrEmpty(url)) return url;
+            if (!url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
+                !url.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) return url;
+
+            string separator = url.IndexOf('?') >= 0 ? "&" : "?";
+            return url + separator + "t=" + DateTime.UtcNow.Ticks;
+        }
+
         /// <summary>异步拉取远程 registry（结果为空表示失败）。</summary>
         public static void LoadRemote(string url, Action<CoffeeBeanRegistryData> onCompleted)
         {
@@ -110,7 +129,8 @@ namespace CoffeeBean.EditorTools
                 return;
             }
 
-            var request = UnityWebRequest.Get(url);
+            string requestUrl = WithCacheBuster(url);
+            var request = UnityWebRequest.Get(requestUrl);
             var op = request.SendWebRequest();
             op.completed += _ =>
             {

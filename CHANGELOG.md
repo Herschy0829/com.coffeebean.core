@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.1.65] - 2026-09-18
+
+### Fixed
+- **装依赖会"报成功但什么都没发生"**（实测：等了 5 分钟，manifest 纹丝不动）。两个独立缺陷叠加：
+
+  1. **远程目录请求没有缓存穿透**。`raw.githubusercontent.com` 的响应头是
+     `Cache-Control: max-age=300` —— 刚发完新版本，编辑器读到的**仍是旧目录**。
+     于是算出来的"要装的版本"与工程现状完全相同，UPM 请求成了**空操作**。
+     现在 `RegistrySource.LoadRemote` 统一追加 `?t=<ticks>`（目录只有几 KB，代价可忽略）。
+  2. **安装器只按"计划"报成功，从不核对 manifest**。计划是空操作时照样打印
+     "已安装 N 个模块"。现在装完会**回读 manifest 逐个比对计划里的地址**：
+     对不上就明确报"未生效"，并指出最可能的原因（拿到的是 CDN 缓存的旧目录），
+     而不是让用户对着一个不会变化的结果干等。
+
+  这两个缺陷和之前那个「检查更新谎报最新」是同一类问题 —— 当时只修了目录侧，漏了安装器侧。
+
+- **内置 registry 指向 asset v0.6.1 / core v0.1.65**。
+
+### Tests
+- 新增 6 条：`WithCacheBuster` 追加参数 / 已有 query 时用 `&` / 非 http 原样返回；
+  `FindMissingManifestUrls` 对真实存在的引用不误报、对缺失的报出来、null 与空串跳过。
+- Core 92 → 98（`ModuleInstallerTests` 为新文件）；全量 EditMode **719 → 725**。
+
 ## [0.1.64] - 2026-09-18
 
 ### Changed

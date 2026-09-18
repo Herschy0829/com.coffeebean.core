@@ -250,8 +250,54 @@ namespace CoffeeBean.EditorTools
                 }
 
                 AssetDatabase.Refresh();
+
+                // UPM 说成功不等于**真的变了**：如果计划里的地址与 manifest 现状相同，
+                // 这次请求就是个空操作，而上面的 summary 照样会说"已安装 N 个模块"。
+                // 实测踩到过：远程目录命中 CDN 缓存（raw.githubusercontent max-age=300），
+                // 拿到的还是旧目录 → 计划 = 现状 → 空操作 → 界面显示"已安装"，manifest 却纹丝不动。
+                if (toAdd.Length > 0)
+                {
+                    List<string> missing = FindMissingManifestUrls(toAdd);
+                    if (missing.Count > 0)
+                    {
+                        string detail =
+                            $"UPM 报告成功，但 Packages/manifest.json 里没有出现这 {missing.Count} 个地址：\n  " +
+                            string.Join("\n  ", missing) +
+                            "\n最常见的原因：远程模块目录命中了 CDN 缓存（raw.githubusercontent 的 " +
+                            "Cache-Control 是 max-age=300），拿到的还是旧目录 —— 于是「要装的版本」与现状相同，" +
+                            "这次请求成了空操作。稍等片刻再试即可（框架已给目录请求加了缓存穿透参数）。";
+                        Debug.LogWarning($"[CoffeeBean] {detail}");
+                        onCompleted?.Invoke(false, summary + "\n\n⚠ " + detail);
+                        return;
+                    }
+                }
+
                 onCompleted?.Invoke(true, summary);
             });
+        }
+
+        /// <summary>计划要装的 URL 是否真的进了 manifest（读不到 manifest 就不下结论，返回空）。</summary>
+        internal static List<string> FindMissingManifestUrls(IEnumerable<string> urls)
+        {
+            var missing = new List<string>();
+            string manifest = null;
+            try
+            {
+                const string manifestPath = "Packages/manifest.json";
+                if (File.Exists(manifestPath)) manifest = File.ReadAllText(manifestPath);
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[CoffeeBean] 核对 manifest 失败（不影响安装结果判断）: {e.Message}");
+            }
+            if (string.IsNullOrEmpty(manifest)) return missing;
+
+            foreach (string url in urls)
+            {
+                if (string.IsNullOrEmpty(url)) continue;
+                if (manifest.IndexOf(url, StringComparison.Ordinal) < 0) missing.Add(url);
+            }
+            return missing;
         }
 
         private static List<string> UrlsOf(List<PlannedPackage> packages)
