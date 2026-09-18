@@ -1,5 +1,41 @@
 # Changelog
 
+## [0.1.61] - 2026-09-17
+
+### Changed
+- **tools 与 asset 的第三方硬依赖登记进 registry**（纯数据，无运行时代码改动）：
+
+  | 模块 | 新增 `externalDependencies` | 为什么 |
+  |---|---|---|
+  | `com.coffeebean.tools` | `com.cysharp.unitask`、`com.neuecc.unirx` | tools 把它们变成了**强制依赖**（package.json 里的 dependencies） |
+  | `com.coffeebean.asset` | `com.cysharp.unitask` | 资源管理改用 UniTask |
+
+  这两个第三方包**不在任何 registry 里**，UPM 无法按版本号解析 —— 不登记的话，
+  "在新工程里一键安装"会直接失败。登记后 `ModuleDependencyResolver` 会把它们排在同一批的
+  最前面（第三方 → CoffeeBean 依赖 → 目标模块），一次 `Client.AddAndRemove` 提交，
+  UPM 解一次依赖图就能同时满足。
+
+  registry 指针：tools → v0.12.0、asset → v0.4.0、core → v0.1.61。
+
+### Tests
+- 新增 4 条：
+  - `BuiltInRegistry_ToolsDeclaresItsForcedThirdPartyDependencies`（tools 必须登记 uniRx + unitask，
+    且给带 `?path=` 的完整 UPM 地址）；
+  - `BuiltInRegistry_AssetDeclaresUniTask`；
+  - `Resolve_Tools_PlansThirdPartyBeforeTools`（**行为锁**：空工程里装 tools，计划里第三方必须排在
+    tools 之前、tools 最后 —— 顺序错了 UPM 就解不开硬依赖）；
+  - `BuiltInRegistry_ThirdPartyUrlsMatchTheToolsCatalog`：按全名反射拿 tools 的
+    `CThirdPartyCatalog`，逐条比对 registry 里的 UPM 地址 —— 两处各自维护，
+    漂移就会出现"同一个包两个来源"。
+- Core 测试 88 → 92，全量 EditMode **690 → 699**（asset 模块另 +4）。
+
+### Fixed（工具链）
+- `scripts/run-editmode-tests.ps1` 读结果 XML 改用**显式 UTF-8 解码**。
+  Unity 的 NUnit 结果文件**没有 BOM**，而 Windows PowerShell 5.1 的 `Get-Content` 默认按 ANSI 解码 ——
+  一旦 XML 里出现中文（`<message>` / `<output>` 的 CDATA），就会被解成乱码甚至破坏 XML 结构，
+  表现为"测试全过了，脚本却报 start tag 'message' does not match end tag 'output'"。
+  这条以前是潜伏的（结果文件带 BOM 或没有中文 CDATA 就看不出来），这次加了带中文的跳过原因才暴露。
+
 ## [0.1.60] - 2026-09-17
 
 ### Added

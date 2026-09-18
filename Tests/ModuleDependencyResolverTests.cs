@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using CoffeeBean.EditorTools;
@@ -740,6 +741,108 @@ namespace CoffeeBean.Tests
 
             Assert.IsTrue(core.dependencies == null || core.dependencies.Length == 0,
                 "Core 是框架的根模块，不应声明任何 com.coffeebean.* 依赖");
+        }
+
+        // ========== 第三方硬依赖（tools / asset） ==========
+
+        private static CoffeeBeanRegistryEntry FindEntry(string id)
+            => RegistrySource.LoadBuiltIn().modules.FirstOrDefault(e => e.id == id);
+
+        private static void AssertHasExternal(CoffeeBeanRegistryEntry entry, string id, string urlMarker)
+        {
+            CoffeeBeanExternalDependency dep = (entry.externalDependencies ?? new CoffeeBeanExternalDependency[0])
+                .FirstOrDefault(x => x.id == id);
+            Assert.IsNotNull(dep, $"{entry.id} 缺少第三方依赖 {id} —— 新工程装它时会因解析不到而失败");
+            StringAssert.Contains(".git?path=", dep.url, $"{id} 必须给带 ?path= 的完整 UPM 引用（仓库根没有 package.json）");
+            StringAssert.Contains(urlMarker, dep.url);
+        }
+
+        /// <summary>
+        /// tools 把 UniRx / UniTask 声明成**硬依赖**（package.json 里的 dependencies），
+        /// 而这两个包不在任何 registry 里 —— UPM 自己解析不到。
+        /// 所以 registry 必须替它们登记完整 UPM 地址，否则"在新工程里装 tools"会直接失败。
+        /// 这是 core"registry 要覆盖 package.json 依赖"那条规矩的延伸：
+        /// 第三方依赖走 externalDependencies，而不是靠 UPM 的版本号。
+        /// </summary>
+        [Test]
+        public void BuiltInRegistry_ToolsDeclaresItsForcedThirdPartyDependencies()
+        {
+            CoffeeBeanRegistryEntry tools = FindEntry("com.coffeebean.tools");
+            Assert.IsNotNull(tools, "registry 里应有 com.coffeebean.tools");
+
+            AssertHasExternal(tools, "com.cysharp.unitask", "UniTask");
+            AssertHasExternal(tools, "com.neuecc.unirx", "UniRx");
+        }
+
+        /// <summary>asset（资源管理）用 UniTask，同样要登记，否则单独装 asset 会解析失败。</summary>
+        [Test]
+        public void BuiltInRegistry_AssetDeclaresUniTask()
+        {
+            CoffeeBeanRegistryEntry asset = FindEntry("com.coffeebean.asset");
+            Assert.IsNotNull(asset, "registry 里应有 com.coffeebean.asset");
+
+            AssertHasExternal(asset, "com.cysharp.unitask", "UniTask");
+        }
+
+        /// <summary>
+        /// 一次 UPM 请求里"第三方 → 目标模块"的顺序：UPM 只解一次依赖图，
+        /// 第三方必须先出现在同一批里，tools 的硬依赖才解得开。
+        /// </summary>
+        [Test]
+        public void Resolve_Tools_PlansThirdPartyBeforeTools()
+        {
+            CoffeeBeanRegistryData registry = RegistrySource.LoadBuiltIn();
+            ModuleInstallPlan plan = ModuleDependencyResolver.Resolve(
+                registry, "com.coffeebean.tools", new string[0]);
+
+            Assert.IsFalse(plan.HasErrors, plan.Error);
+
+            var ids = plan.Packages.Select(p => p.Id).ToList();
+            CollectionAssert.Contains(ids, "com.cysharp.unitask");
+            CollectionAssert.Contains(ids, "com.neuecc.unirx");
+            Assert.Less(ids.IndexOf("com.cysharp.unitask"), ids.IndexOf("com.coffeebean.tools"),
+                "第三方依赖必须排在 tools 之前（同一批一起解析）");
+            Assert.AreEqual("com.coffeebean.tools", plan.Packages.Last().Id, "目标模块必须最后装");
+        }
+
+        /// <summary>
+        /// registry 与 tools 的 <c>CThirdPartyCatalog</c> 必须给**同一个** UPM 地址。
+        ///
+        /// 这两处各自维护：registry 管"装的时候拉哪个地址"，tools 的目录管"菜单/面板显示与一键集成用哪个"。
+        /// 一旦漂移，同一个依赖可能被装成两个不同来源（比如 tag 与 commit 各一份）。
+        /// core 不能编译期引用 tools，所以按全名反射拿它的清单。
+        /// </summary>
+        [Test]
+        public void BuiltInRegistry_ThirdPartyUrlsMatchTheToolsCatalog()
+        {
+            Type catalog = null;
+            foreach (System.Reflection.Assembly asm in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                if (asm.GetName().Name != "CoffeeBean.Tools.Editor") continue;
+                catalog = asm.GetType("CoffeeBean.EditorTools.CThirdPartyCatalog");
+            }
+            if (catalog == null) Assert.Ignore("未安装 com.coffeebean.tools（Editor 程序集不在场），跳过");
+
+            var byId = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (object package in (System.Collections.IEnumerable)catalog.GetProperty("All").GetValue(null))
+            {
+                Type t = package.GetType();
+                byId[(string)t.GetProperty("Id").GetValue(package)] = (string)t.GetProperty("Url").GetValue(package);
+            }
+            Assert.IsNotEmpty(byId, "tools 的第三方清单不应为空");
+
+            // tools 与 asset 两个条目都登记了这些第三方依赖，逐个比对
+            foreach (string entryId in new[] { "com.coffeebean.tools", "com.coffeebean.asset" })
+            {
+                CoffeeBeanRegistryEntry entry = FindEntry(entryId);
+                foreach (CoffeeBeanExternalDependency dep in entry.externalDependencies ?? new CoffeeBeanExternalDependency[0])
+                {
+                    string expected;
+                    if (!byId.TryGetValue(dep.id, out expected)) continue; // 清单里没登记的第三方依赖不比对
+                    Assert.AreEqual(expected, dep.url,
+                        $"{dep.id} 在 registry（{entryId}）与 tools 的 CThirdPartyCatalog 里地址不一致");
+                }
+            }
         }
     }
 }

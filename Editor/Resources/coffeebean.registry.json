@@ -4,7 +4,7 @@
     {
       "id": "com.coffeebean.core",
       "repo": "https://github.com/Herschy0829/com.coffeebean.core.git",
-      "latest": "v0.1.60",
+      "latest": "v0.1.61",
       "dependencies": []
     },
     {
@@ -19,9 +19,15 @@
     {
       "id": "com.coffeebean.asset",
       "repo": "https://github.com/Herschy0829/com.coffeebean.asset.git",
-      "latest": "v0.3.0",
+      "latest": "v0.4.0",
       "dependencies": [
         "com.coffeebean.tools"
+      ],
+      "externalDependencies": [
+        {
+          "id": "com.cysharp.unitask",
+          "url": "https://github.com/Cysharp/UniTask.git?path=src/UniTask/Assets/Plugins/UniTask#2.5.11"
+        }
       ]
     },
     {
@@ -121,13 +127,23 @@
     {
       "id": "com.coffeebean.tools",
       "repo": "https://github.com/Herschy0829/com.coffeebean.tools.git",
-      "latest": "v0.11.0",
-      "dependencies": []
+      "latest": "v0.12.0",
+      "dependencies": [],
+      "externalDependencies": [
+        {
+          "id": "com.cysharp.unitask",
+          "url": "https://github.com/Cysharp/UniTask.git?path=src/UniTask/Assets/Plugins/UniTask#2.5.11"
+        },
+        {
+          "id": "com.neuecc.unirx",
+          "url": "https://github.com/neuecc/UniRx.git?path=Assets/Plugins/UniRx/Scripts#c244f9a89d05cda62acd0e4572510c2d6843164c"
+        }
+      ]
     },
     {
       "id": "com.coffeebean.ui",
       "repo": "https://github.com/Herschy0829/com.coffeebean.ui.git",
-      "latest": "v0.2.4",
+      "latest": "v0.2.5",
       "dependencies": [
         "com.coffeebean.tools",
         "com.coffeebean.asset"
