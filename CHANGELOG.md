@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.1.71] - 2026-09-19
+
+### Changed
+- **内置 registry 指向 tools v0.13.0**：tools 删掉了「第三方依赖一键集成」（Hub 内嵌面板 +
+  `Tools/CoffeeBean/第三方依赖/*` 菜单 + `CThirdPartyIntegration` / `CThirdPartyCatalog`）——
+  UniRx / UniTask 早已是 tools 的硬依赖，装的时候由 registry 的 `externalDependencies` 一次解析，
+  那套菜单只是多余的第二条路径（还要自己再维护一份地址清单）。**第三方依赖现在只有 registry 一个来源。**
+  指针：core → v0.1.71、tools → v0.13.0（registry 里 tools 的 `externalDependencies` 原样保留）。
+
+### Tests
+- 重写 `BuiltInRegistry_ThirdPartyUrlsMatchTheToolsCatalog` →
+  `BuiltInRegistry_ThirdPartyUrlsArePinnedAndConsistent`：tools 的目录已删除，改成**直接钉死**
+  UniTask / UniRx 的锁定地址，并额外断言"同一个包在所有 registry 条目里只能有一个地址"
+  （原来靠反射比对 tools 清单，现在不依赖任何模块在场）。
+
 ## [0.1.70] - 2026-09-18
 
 ### Changed

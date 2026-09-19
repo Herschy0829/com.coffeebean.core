@@ -79,22 +79,6 @@ namespace CoffeeBean.Tests
             Assert.DoesNotThrow(() => inline.Open());
         }
 
-        /// <summary>
-        /// tools 模块提供的「第三方依赖」面板必须被 Hub 发现为**内嵌**面板。
-        /// 这条锁住"面板在 Hub 里可见"这件事本身（改错方法名/漏加 attribute 会红）。
-        /// </summary>
-        [Test]
-        public void Scan_FindsThirdPartyInlinePanel()
-        {
-            var tool = CoffeeBean.EditorTools.CoffeeBeanToolRegistry.Scan()
-                .FirstOrDefault(t => t.Title == "第三方依赖");
-            if (tool == null) Assert.Ignore("未安装 com.coffeebean.tools（该面板由它提供），跳过");
-
-            Assert.IsTrue(tool.IsInline, "「第三方依赖」应内嵌在 Hub 内容区，而不是另开窗口");
-            Assert.AreEqual("Tools", tool.Module);
-            Assert.IsNotEmpty(tool.Description);
-        }
-
         [Test]
         public void FindInlineDraw_RequiresVoidStaticMethod()
         {

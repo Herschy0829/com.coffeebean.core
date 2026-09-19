@@ -806,43 +806,49 @@ namespace CoffeeBean.Tests
         }
 
         /// <summary>
-        /// registry 与 tools 的 <c>CThirdPartyCatalog</c> 必须给**同一个** UPM 地址。
+        /// registry 给 tools / asset 登记的第三方依赖，地址必须**锁定修订且处处一致**。
         ///
-        /// 这两处各自维护：registry 管"装的时候拉哪个地址"，tools 的目录管"菜单/面板显示与一键集成用哪个"。
-        /// 一旦漂移，同一个依赖可能被装成两个不同来源（比如 tag 与 commit 各一份）。
-        /// core 不能编译期引用 tools，所以按全名反射拿它的清单。
+        /// 由来（tools v0.13.0）：tools 删掉了「第三方依赖一键集成」（`CThirdPartyCatalog` 已移除），
+        /// 第三方依赖只剩 registry 这一个来源 —— 更要防住"同一个包登记成两个地址"
+        /// （tag 与 commit 各一份会让同一个依赖装成两个来源）。原来这条测试靠反射比对 tools 的目录，
+        /// 现在直接钉死期望值。
         /// </summary>
         [Test]
-        public void BuiltInRegistry_ThirdPartyUrlsMatchTheToolsCatalog()
+        public void BuiltInRegistry_ThirdPartyUrlsArePinnedAndConsistent()
         {
-            Type catalog = null;
-            foreach (System.Reflection.Assembly asm in AppDomain.CurrentDomain.GetAssemblies())
+            var expected = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
-                if (asm.GetName().Name != "CoffeeBean.Tools.Editor") continue;
-                catalog = asm.GetType("CoffeeBean.EditorTools.CThirdPartyCatalog");
-            }
-            if (catalog == null) Assert.Ignore("未安装 com.coffeebean.tools（Editor 程序集不在场），跳过");
+                {
+                    "com.cysharp.unitask",
+                    "https://github.com/Cysharp/UniTask.git?path=src/UniTask/Assets/Plugins/UniTask#2.5.11"
+                },
+                {
+                    "com.neuecc.unirx",
+                    "https://github.com/neuecc/UniRx.git?path=Assets/Plugins/UniRx/Scripts#c244f9a89d05cda62acd0e4572510c2d6843164c"
+                },
+            };
 
-            var byId = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            foreach (object package in (System.Collections.IEnumerable)catalog.GetProperty("All").GetValue(null))
+            CoffeeBeanRegistryData registry = RegistrySource.LoadBuiltIn();
+            var seen = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (CoffeeBeanRegistryEntry entry in registry.modules)
             {
-                Type t = package.GetType();
-                byId[(string)t.GetProperty("Id").GetValue(package)] = (string)t.GetProperty("Url").GetValue(package);
-            }
-            Assert.IsNotEmpty(byId, "tools 的第三方清单不应为空");
-
-            // tools 与 asset 两个条目都登记了这些第三方依赖，逐个比对
-            foreach (string entryId in new[] { "com.coffeebean.tools", "com.coffeebean.asset" })
-            {
-                CoffeeBeanRegistryEntry entry = FindEntry(entryId);
                 foreach (CoffeeBeanExternalDependency dep in entry.externalDependencies ?? new CoffeeBeanExternalDependency[0])
                 {
-                    string expected;
-                    if (!byId.TryGetValue(dep.id, out expected)) continue; // 清单里没登记的第三方依赖不比对
-                    Assert.AreEqual(expected, dep.url,
-                        $"{dep.id} 在 registry（{entryId}）与 tools 的 CThirdPartyCatalog 里地址不一致");
+                    string want;
+                    if (expected.TryGetValue(dep.id, out want))
+                        Assert.AreEqual(want, dep.url,
+                            $"{dep.id}（{entry.id}）的地址必须与框架锁定的那个修订逐字一致");
+
+                    string previous;
+                    if (seen.TryGetValue(dep.id, out previous))
+                        Assert.AreEqual(previous, dep.url,
+                            $"{dep.id} 在不同条目里给了两个地址（{previous} / {dep.url}）—— 同一依赖只允许一个来源");
+                    else seen[dep.id] = dep.url;
                 }
             }
+
+            foreach (string id in expected.Keys)
+                CollectionAssert.Contains(seen.Keys, id, "registry 里必须登记 " + id + "，否则装 tools / asset 会解析失败");
         }
     }
 }
